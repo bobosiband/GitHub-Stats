@@ -213,6 +213,82 @@ to the most recent 365 days with a warning if a cohort ever exceeds a year). Tit
 program cohorts and `global` are independent — the same member can hold `most_commits`
 in both.
 
+## Deploying
+
+Two supported paths. **Persistence is guaranteed by managed Postgres + `prisma
+migrate deploy` on every release** — no destructive commands (`db push`,
+`migrate reset`, `--force-reset`) appear anywhere in a deploy path.
+
+### Primary — Render (Web Service) + Neon (Postgres)
+
+Neon's free tier persists indefinitely, so the database survives across releases
+and platform changes. **Do NOT use Render's free Postgres — it is deleted after
+~90 days and will silently take your data with it.**
+
+1. **Neon**: create a project. Copy the **pooled** connection string; make sure
+   it ends with `?sslmode=require`. This is your `DATABASE_URL`.
+2. **Render** → *New → Web Service* → connect the GitHub repo.
+   - **Runtime:** Docker.
+   - **Health check path:** `/health`.
+   - **Environment variables** (mark secrets as "sync: false" if using the
+     Blueprint):
+
+     | Var | Value |
+     |-----|-------|
+     | `DATABASE_URL` | Neon pooled URL with `?sslmode=require` |
+     | `GITHUB_TOKEN` | GitHub PAT (public read) |
+     | `ADMIN_TOKEN`  | Long random string (guards `/admin/*`) |
+     | `CORS_ORIGIN`  | Frontend origins, comma-separated |
+     | `ENABLE_CRON`  | `false` on free tier (service sleeps → rely on the GH Actions trigger); `true` on paid always-on |
+     | `NODE_ENV`     | `production` |
+3. A minimal Blueprint lives at [`render.yaml`](render.yaml) for one-click
+   setup — Render will prompt for each `sync: false` secret.
+
+### Alternative — Railway (Service + Postgres plugin)
+
+One platform, always-on hobby tier (~$5/mo). Deploy via the Dockerfile; add the
+Postgres plugin — Railway sets `DATABASE_URL` automatically. Set the same
+env vars as above, with **`ENABLE_CRON=true`** (Railway doesn't sleep, so
+node-cron is enough; the GH Actions workflow becomes a redundant backstop).
+
+### Cost / sleep behaviour, briefly
+
+Render free web + Neon free = $0 but Render's service sleeps when idle → cron
+inside the process won't fire, which is why we ship `POST /admin/sync-all` and
+a GitHub Actions workflow that curls it. Railway hobby (~$5/mo) is always-on
+and lets in-process node-cron do the job by itself.
+
+### GitHub Actions sync (both paths)
+
+Add two repo secrets under *Settings → Secrets and variables → Actions*:
+
+- `APP_URL` — e.g. `https://gitrank-backend.onrender.com`
+- `ADMIN_TOKEN` — same value the deploy uses
+
+`.github/workflows/sync.yml` fires on `schedule: '0 */3 * * *'` and on
+`workflow_dispatch`; each run POSTs to `${APP_URL}/admin/sync-all` with the
+bearer token and fails on non-2xx. On free tiers it doubles as a wake-up ping.
+
+### Verifying a deploy
+
+```bash
+export APP_URL=https://your-service.onrender.com
+export ADMIN_TOKEN=…
+
+curl $APP_URL/health
+
+# Join a test member on the global cohort
+curl -X POST $APP_URL/cohorts/global/join \
+  -H "content-type: application/json" \
+  -d '{"githubUsername":"octocat","zid":"z9999999"}'
+
+# Force a sync
+curl -X POST $APP_URL/admin/sync-all -H "authorization: Bearer $ADMIN_TOKEN"
+
+# Check the leaderboard
+curl $APP_URL/cohorts/global/leaderboard
+```
+
 ## Docker (local smoke run)
 
 The image is multi-stage (`node:20-alpine`), copies only prod deps + source, and
