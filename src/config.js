@@ -37,7 +37,6 @@ export function loadConfig(env = process.env) {
     const issues = parsed.error.issues
       .map((i) => `  - ${i.path.join('.') || '(root)'}: ${i.message}`)
       .join('\n');
-    // eslint-disable-next-line no-console
     console.error(`Invalid environment configuration:\n${issues}`);
     throw new Error('Invalid environment configuration');
   }
