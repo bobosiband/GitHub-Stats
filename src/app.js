@@ -7,6 +7,7 @@ import { openapiDocument } from './docs/openapi.js';
 import prismaPlugin from './plugins/prisma.js';
 import errorHandlerPlugin from './plugins/errorHandler.js';
 import authPlugin from './plugins/auth.js';
+import securityPlugin from './plugins/security.js';
 
 import { createGithubClient } from './services/github/client.js';
 import { createGithubService } from './services/github/fetchUserStats.js';
@@ -47,6 +48,13 @@ export async function buildApp(opts = {}) {
   app.decorate('verifyGithubUser', verifyGithubUser);
 
   await app.register(errorHandlerPlugin);
+  await app.register(securityPlugin, {
+    corsOrigins: config.CORS_ORIGIN,
+    globalMax: opts.rateLimitGlobalMax,
+    globalWindow: opts.rateLimitGlobalWindow,
+    joinMax: opts.rateLimitJoinMax,
+    joinWindow: opts.rateLimitJoinWindow,
+  });
   await app.register(prismaPlugin, { prisma: opts.prisma });
   await app.register(authPlugin, { adminToken: config.ADMIN_TOKEN });
 

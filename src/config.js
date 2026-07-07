@@ -8,6 +8,17 @@ const booleanish = z
   .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
   .transform((v) => v === true || v === 'true' || v === '1');
 
+/** Comma-separated origin list → array of trimmed non-empty strings. */
+const originList = z
+  .string()
+  .default('http://localhost:5173')
+  .transform((v) =>
+    v
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean),
+  );
+
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   GITHUB_TOKEN: z.string().min(1, 'GITHUB_TOKEN is required'),
@@ -18,6 +29,7 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   ENABLE_CRON: booleanish.default(true),
   NODE_ENV: z.string().default('development'),
+  CORS_ORIGIN: originList,
 });
 
 /**

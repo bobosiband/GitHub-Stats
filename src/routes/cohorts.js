@@ -48,7 +48,7 @@ export default async function cohortRoutes(fastify) {
   });
 
   // POST /cohorts/:slug/join — PUBLIC self-serve join
-  fastify.post('/:slug/join', async (request, reply) => {
+  fastify.post('/:slug/join', { config: { rateLimit: fastify.rateLimits.join } }, async (request, reply) => {
     const input = joinBodySchema.parse(request.body ?? {});
     const member = await joinCohort({
       prisma,
