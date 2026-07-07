@@ -30,9 +30,7 @@ export async function buildApp(opts = {}) {
   const config = opts.config ?? defaultConfig;
 
   const app = Fastify({
-    logger:
-      opts.logger ??
-      (config.NODE_ENV === 'test' ? false : { level: config.LOG_LEVEL }),
+    logger: opts.logger ?? (config.NODE_ENV === 'test' ? false : { level: config.LOG_LEVEL }),
   });
 
   // Real github service is the default; tests inject fakes to avoid the network.

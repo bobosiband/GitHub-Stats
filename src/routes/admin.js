@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import { syncCohort } from '../services/sync.js';
 import { evaluateCohort } from '../services/titles/engine.js';
-import { getCohortBySlugOrThrow, getMemberByUsernameOrThrow, serializeCohort } from '../services/views.js';
+import {
+  getCohortBySlugOrThrow,
+  getMemberByUsernameOrThrow,
+  serializeCohort,
+} from '../services/views.js';
 
 const createCohortSchema = z.object({
   name: z.string().min(1),

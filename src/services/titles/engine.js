@@ -77,7 +77,8 @@ async function evaluateRecord(tx, { title, rule, cohortId, latest, now }) {
   });
 
   if (candidates.length === 0) {
-    if (current) await tx.titleAward.update({ where: { id: current.id }, data: { revokedAt: now } });
+    if (current)
+      await tx.titleAward.update({ where: { id: current.id }, data: { revokedAt: now } });
     return;
   }
 

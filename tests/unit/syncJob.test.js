@@ -8,7 +8,12 @@ describe('createSyncRunner in-process lock', () => {
 
     // syncAllActive calls prisma.cohort.findMany first; block it on the gate.
     const prisma = {
-      cohort: { findMany: async () => { await gate; return []; } },
+      cohort: {
+        findMany: async () => {
+          await gate;
+          return [];
+        },
+      },
     };
     const runner = createSyncRunner({
       prisma,
@@ -31,7 +36,12 @@ describe('createSyncRunner in-process lock', () => {
 
   it('runs again after the previous run finished', async () => {
     const prisma = { cohort: { findMany: async () => [] } };
-    const runner = createSyncRunner({ prisma, fetchUserStats: async () => ({}), logger: {}, delayMs: 0 });
+    const runner = createSyncRunner({
+      prisma,
+      fetchUserStats: async () => ({}),
+      logger: {},
+      delayMs: 0,
+    });
     const a = await runner.run();
     const b = await runner.run();
     expect(a.skipped).toBe(false);

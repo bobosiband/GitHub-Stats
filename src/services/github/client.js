@@ -44,8 +44,7 @@ function isTransient(err) {
  */
 export function createGithubClient(opts = {}) {
   const gql =
-    opts.graphql ??
-    graphql.defaults({ headers: { authorization: `token ${opts.token}` } });
+    opts.graphql ?? graphql.defaults({ headers: { authorization: `token ${opts.token}` } });
   const wait = opts.sleep ?? sleep;
   const maxRetries = opts.maxRetries ?? 3;
   const maxDelayMs = opts.maxDelayMs ?? 60_000;

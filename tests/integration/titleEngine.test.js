@@ -181,23 +181,49 @@ describe('title engine — idempotency', () => {
     const cohort = await makeCohort();
     await addMember(cohort.id, {
       member: { accountCreatedAt: new Date('2014-01-01T00:00:00Z') },
-      snapshot: { totalCommits: 150, longestStreak: 8, mergedPRs: 3, reviewsGiven: 6, totalStars: 20, totalContributions: 30 },
+      snapshot: {
+        totalCommits: 150,
+        longestStreak: 8,
+        mergedPRs: 3,
+        reviewsGiven: 6,
+        totalStars: 20,
+        totalContributions: 30,
+      },
     });
     await addMember(cohort.id, {
       member: { accountCreatedAt: new Date('2019-01-01T00:00:00Z') },
-      snapshot: { totalCommits: 40, longestStreak: 2, totalContributions: 25, weekendCommitRatio: 0.6 },
+      snapshot: {
+        totalCommits: 40,
+        longestStreak: 2,
+        totalContributions: 25,
+        weekendCommitRatio: 0.6,
+      },
     });
 
     await evaluateCohort({ prisma, cohortId: cohort.id, now: NOW });
     const snapshot1 = await prisma.titleAward.findMany({
       orderBy: { id: 'asc' },
-      select: { id: true, titleId: true, memberId: true, revokedAt: true, value: true, awardedAt: true },
+      select: {
+        id: true,
+        titleId: true,
+        memberId: true,
+        revokedAt: true,
+        value: true,
+        awardedAt: true,
+      },
     });
 
     await evaluateCohort({ prisma, cohortId: cohort.id, now: new Date('2025-06-10T00:00:00Z') });
     const snapshot2 = await prisma.titleAward.findMany({
       orderBy: { id: 'asc' },
-      select: { id: true, titleId: true, memberId: true, revokedAt: true, value: true, awardedAt: true },
+      select: {
+        id: true,
+        titleId: true,
+        memberId: true,
+        revokedAt: true,
+        value: true,
+        awardedAt: true,
+      },
     });
 
     expect(snapshot2).toEqual(snapshot1);

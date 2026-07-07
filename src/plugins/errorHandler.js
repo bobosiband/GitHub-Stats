@@ -35,17 +35,13 @@ async function errorHandlerPlugin(fastify) {
 
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2002') {
-        const target = Array.isArray(error.meta?.target)
-          ? error.meta.target.join(', ')
-          : 'field';
+        const target = Array.isArray(error.meta?.target) ? error.meta.target.join(', ') : 'field';
         return reply.code(409).send({
           error: { code: 'CONFLICT', message: `A record with this ${target} already exists` },
         });
       }
       if (error.code === 'P2025') {
-        return reply
-          .code(404)
-          .send({ error: { code: 'NOT_FOUND', message: 'Record not found' } });
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Record not found' } });
       }
     }
 
@@ -73,7 +69,9 @@ async function errorHandlerPlugin(fastify) {
   fastify.setNotFoundHandler((request, reply) => {
     reply
       .code(404)
-      .send({ error: { code: 'NOT_FOUND', message: `Route ${request.method} ${request.url} not found` } });
+      .send({
+        error: { code: 'NOT_FOUND', message: `Route ${request.method} ${request.url} not found` },
+      });
   });
 }
 

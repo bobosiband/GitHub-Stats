@@ -65,7 +65,10 @@ const toIso = (v, fallback) => (v ? new Date(v).toISOString() : fallback);
  * @param {Date|string} [ctx.today]
  * @returns {UserStats}
  */
-export function normalizeUserStats(user, { programCommitTimestamps = [], today = new Date() } = {}) {
+export function normalizeUserStats(
+  user,
+  { programCommitTimestamps = [], today = new Date() } = {},
+) {
   if (!user) throw new GithubUserNotFoundError('(unknown)');
 
   const repoNodes = user.repositories?.nodes ?? [];

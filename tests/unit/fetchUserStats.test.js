@@ -10,7 +10,10 @@ import {
 } from '../../src/services/github/fetchUserStats.js';
 
 const fixture = JSON.parse(
-  readFileSync(fileURLToPath(new URL('../fixtures/userStatsResponse.json', import.meta.url)), 'utf8'),
+  readFileSync(
+    fileURLToPath(new URL('../fixtures/userStatsResponse.json', import.meta.url)),
+    'utf8',
+  ),
 );
 
 describe('normalizeUserStats', () => {
@@ -124,7 +127,11 @@ describe('createStatsFetcher', () => {
     // First call is the stats query with the login variable.
     expect(seen[0]).toMatchObject({ login: 'octostudent' });
     // Second call is the repo history with the resolved author node id.
-    expect(seen[1]).toMatchObject({ owner: 'octostudent', name: 'cool-project', authorId: 'MDQ6VXNlcjEyMzQ1' });
+    expect(seen[1]).toMatchObject({
+      owner: 'octostudent',
+      name: 'cool-project',
+      authorId: 'MDQ6VXNlcjEyMzQ1',
+    });
   });
 
   it('maps a GraphQL NOT_FOUND to GithubUserNotFoundError', async () => {
@@ -160,7 +167,11 @@ describe('createUserVerifier', () => {
   it('returns a profile for an existing user', async () => {
     const client = { query: async () => fixture };
     const profile = await createUserVerifier(client)({ username: 'octostudent' });
-    expect(profile).toMatchObject({ githubId: 12345, login: 'octostudent', nodeId: 'MDQ6VXNlcjEyMzQ1' });
+    expect(profile).toMatchObject({
+      githubId: 12345,
+      login: 'octostudent',
+      nodeId: 'MDQ6VXNlcjEyMzQ1',
+    });
     expect(profile.accountCreatedAt).toBeInstanceOf(Date);
   });
 

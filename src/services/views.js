@@ -194,7 +194,11 @@ export async function buildCohortTitles(prisma, cohort) {
       records.push({
         ...base,
         holder: holder
-          ? { member: publicMember(holder.member), value: holder.value, awardedAt: holder.awardedAt }
+          ? {
+              member: publicMember(holder.member),
+              value: holder.value,
+              awardedAt: holder.awardedAt,
+            }
           : null,
       });
     } else {

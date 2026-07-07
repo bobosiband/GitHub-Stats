@@ -44,7 +44,11 @@ describe('POST /cohorts/:slug/join', () => {
 
     expect(res.statusCode).toBe(201);
     const body = res.json();
-    expect(body.member).toMatchObject({ githubUsername: 'newbie', zid: 'z9000001', displayName: 'New Bie' });
+    expect(body.member).toMatchObject({
+      githubUsername: 'newbie',
+      zid: 'z9000001',
+      displayName: 'New Bie',
+    });
     expect(body.cohorts).toHaveLength(1);
     expect(body.cohorts[0].cohort.slug).toBe('open');
     expect(body.cohorts[0].programRepos).toEqual([{ owner: 'newbie', name: 'project' }]);
@@ -107,7 +111,8 @@ describe('POST /cohorts/:slug/join', () => {
     const cohortA = await makeCohort({ slug: 'a-cohort', isActive: true });
     const first = await join('a-cohort', { githubUsername: 'returning', zid: 'z9000005' });
     expect(first.statusCode).toBe(201);
-    const memberId = (await prisma.member.findUnique({ where: { githubUsername: 'returning' } })).id;
+    const memberId = (await prisma.member.findUnique({ where: { githubUsername: 'returning' } }))
+      .id;
 
     // Give them a record in cohort A.
     await prisma.statSnapshot.create({
@@ -116,10 +121,22 @@ describe('POST /cohorts/:slug/join', () => {
         cohortId: cohortA.id,
         totalCommits: 300,
         totalContributions: 320,
-        totalPRs: 0, mergedPRs: 0, reviewsGiven: 0, issuesOpened: 0, followers: 0,
-        totalStars: 0, repoCount: 0, contributedRepoCount: 0, languageCount: 0, topLanguages: [],
-        longestStreak: 0, currentStreak: 0, maxCommitsInOneDay: 0, weekendCommitRatio: 0,
-        nightCommitRatio: null, calendar: [],
+        totalPRs: 0,
+        mergedPRs: 0,
+        reviewsGiven: 0,
+        issuesOpened: 0,
+        followers: 0,
+        totalStars: 0,
+        repoCount: 0,
+        contributedRepoCount: 0,
+        languageCount: 0,
+        topLanguages: [],
+        longestStreak: 0,
+        currentStreak: 0,
+        maxCommitsInOneDay: 0,
+        weekendCommitRatio: 0,
+        nightCommitRatio: null,
+        calendar: [],
       },
     });
     await evaluateCohort({ prisma, cohortId: cohortA.id });

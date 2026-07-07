@@ -40,7 +40,11 @@ describe('GET /cohorts/:slug', () => {
     await makeCohort({ slug: 'detail-x', name: 'Detail Cohort' });
     const res = await app.inject({ method: 'GET', url: '/cohorts/detail-x' });
     expect(res.statusCode).toBe(200);
-    expect(res.json().cohort).toMatchObject({ slug: 'detail-x', name: 'Detail Cohort', memberCount: 0 });
+    expect(res.json().cohort).toMatchObject({
+      slug: 'detail-x',
+      name: 'Detail Cohort',
+      memberCount: 0,
+    });
   });
 
   it('404s for an unknown slug with the standard error shape', async () => {
@@ -78,10 +82,18 @@ describe('GET /cohorts/:slug/leaderboard', () => {
   it('sorts by the requested stat', async () => {
     await seedLeaderboard();
     const res = await app.inject({ method: 'GET', url: '/cohorts/lb/leaderboard?sort=stars' });
-    expect(res.json().ranking.map((r) => r.member.githubUsername)).toEqual(['bob', 'carol', 'alice']);
+    expect(res.json().ranking.map((r) => r.member.githubUsername)).toEqual([
+      'bob',
+      'carol',
+      'alice',
+    ]);
 
     const streak = await app.inject({ method: 'GET', url: '/cohorts/lb/leaderboard?sort=streak' });
-    expect(streak.json().ranking.map((r) => r.member.githubUsername)).toEqual(['bob', 'alice', 'carol']);
+    expect(streak.json().ranking.map((r) => r.member.githubUsername)).toEqual([
+      'bob',
+      'alice',
+      'carol',
+    ]);
   });
 
   it('rejects an invalid sort value', async () => {

@@ -104,7 +104,13 @@ export const REPO_COMMITS = /* GraphQL */ `
       defaultBranchRef {
         target {
           ... on Commit {
-            history(first: 100, since: $since, until: $until, author: { id: $authorId }, after: $cursor) {
+            history(
+              first: 100
+              since: $since
+              until: $until
+              author: { id: $authorId }
+              after: $cursor
+            ) {
               pageInfo {
                 hasNextPage
                 endCursor

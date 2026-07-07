@@ -1,7 +1,14 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { syncCohort, syncMember, syncAllActive } from '../../src/services/sync.js';
 import { evaluateCohort } from '../../src/services/titles/engine.js';
-import { getPrisma, resetDb, disconnectDb, makeCohort, makeMember, makeMembership } from '../helpers/db.js';
+import {
+  getPrisma,
+  resetDb,
+  disconnectDb,
+  makeCohort,
+  makeMember,
+  makeMembership,
+} from '../helpers/db.js';
 
 const prisma = getPrisma();
 const NOW = new Date('2025-06-01T00:00:00Z');
@@ -65,11 +72,22 @@ describe('syncCohort', () => {
     await makeMembership(bob.id, cohort.id);
 
     const fetchUserStats = fakeFetcher({
-      alice: stats({ githubId: 111, avatarUrl: 'https://avatar/alice', totalCommits: 100, totalContributions: 120 }),
+      alice: stats({
+        githubId: 111,
+        avatarUrl: 'https://avatar/alice',
+        totalCommits: 100,
+        totalContributions: 120,
+      }),
       bob: stats({ githubId: 222, totalCommits: 50, totalContributions: 60 }),
     });
 
-    const summary = await syncCohort({ prisma, fetchUserStats, cohortId: cohort.id, now: NOW, delayMs: 0 });
+    const summary = await syncCohort({
+      prisma,
+      fetchUserStats,
+      cohortId: cohort.id,
+      now: NOW,
+      delayMs: 0,
+    });
 
     expect(summary.membersSynced).toBe(2);
     expect(summary.snapshotsCreated).toBe(2);
@@ -96,7 +114,13 @@ describe('syncCohort', () => {
       bad: new Error('GitHub exploded'),
     });
 
-    const summary = await syncCohort({ prisma, fetchUserStats, cohortId: cohort.id, now: NOW, delayMs: 0 });
+    const summary = await syncCohort({
+      prisma,
+      fetchUserStats,
+      cohortId: cohort.id,
+      now: NOW,
+      delayMs: 0,
+    });
 
     expect(summary.membersSynced).toBe(1);
     expect(summary.errors).toEqual([{ username: 'bad', error: 'GitHub exploded' }]);
@@ -148,7 +172,13 @@ describe('syncMember & syncAllActive', () => {
     await makeMembership(m.id, cohort.id);
     const fetchUserStats = fakeFetcher({ solo: stats({ totalCommits: 7 }) });
 
-    const snap = await syncMember({ prisma, fetchUserStats, memberId: m.id, cohortId: cohort.id, now: NOW });
+    const snap = await syncMember({
+      prisma,
+      fetchUserStats,
+      memberId: m.id,
+      cohortId: cohort.id,
+      now: NOW,
+    });
     expect(snap.totalCommits).toBe(7);
   });
 
@@ -160,7 +190,10 @@ describe('syncMember & syncAllActive', () => {
     await makeMembership(m1.id, active.id);
     await makeMembership(m2.id, inactive.id);
 
-    const fetchUserStats = fakeFetcher({ a1: stats({ totalCommits: 1 }), a2: stats({ totalCommits: 1 }) });
+    const fetchUserStats = fakeFetcher({
+      a1: stats({ totalCommits: 1 }),
+      a2: stats({ totalCommits: 1 }),
+    });
     const summaries = await syncAllActive({ prisma, fetchUserStats, now: NOW, delayMs: 0 });
 
     expect(summaries).toHaveLength(1);

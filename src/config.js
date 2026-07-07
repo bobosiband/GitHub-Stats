@@ -15,9 +15,7 @@ const envSchema = z.object({
   SYNC_CRON: z.string().default('0 */3 * * *'),
   PORT: z.coerce.number().int().positive().default(3000),
   HOST: z.string().default('0.0.0.0'),
-  LOG_LEVEL: z
-    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
-    .default('info'),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   ENABLE_CRON: booleanish.default(true),
   NODE_ENV: z.string().default('development'),
 });

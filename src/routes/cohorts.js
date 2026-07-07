@@ -6,10 +6,7 @@ import { joinCohort } from '../services/join.js';
 const zidSchema = z.string().regex(/^z\d{7}$/, 'zid must be "z" followed by exactly 7 digits');
 const usernameSchema = z
   .string()
-  .regex(
-    /^[a-zA-Z\d](?:[a-zA-Z\d]|-(?=[a-zA-Z\d])){0,38}$/,
-    'invalid GitHub username',
-  );
+  .regex(/^[a-zA-Z\d](?:[a-zA-Z\d]|-(?=[a-zA-Z\d])){0,38}$/, 'invalid GitHub username');
 const programRepoSchema = z
   .union([
     z.string().regex(/^[^/\s]+\/[^/\s]+$/, 'programRepo must be "owner/name"'),

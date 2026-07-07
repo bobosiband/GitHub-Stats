@@ -137,11 +137,19 @@ export async function syncCohort({
  * Sync all active cohorts. Returns one summary per cohort.
  * @returns {Promise<Array>}
  */
-export async function syncAllActive({ prisma, fetchUserStats, now = new Date(), delayMs = 250, logger }) {
+export async function syncAllActive({
+  prisma,
+  fetchUserStats,
+  now = new Date(),
+  delayMs = 250,
+  logger,
+}) {
   const cohorts = await prisma.cohort.findMany({ where: { isActive: true }, select: { id: true } });
   const summaries = [];
   for (const { id } of cohorts) {
-    summaries.push(await syncCohort({ prisma, fetchUserStats, cohortId: id, now, delayMs, logger }));
+    summaries.push(
+      await syncCohort({ prisma, fetchUserStats, cohortId: id, now, delayMs, logger }),
+    );
   }
   return summaries;
 }

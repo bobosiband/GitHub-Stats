@@ -17,14 +17,36 @@ let app;
 // Per-username stat overrides the sync route will "fetch".
 let statsByUser = {};
 const zero = {
-  githubId: 1, nodeId: 'N', login: 'x', displayName: 'X', avatarUrl: null,
+  githubId: 1,
+  nodeId: 'N',
+  login: 'x',
+  displayName: 'X',
+  avatarUrl: null,
   accountCreatedAt: new Date('2018-01-01T00:00:00Z'),
-  followers: 0, contributedRepoCount: 0, mergedPRs: 0, repoCount: 0, totalStars: 0,
-  languageCount: 0, topLanguages: [], totalCommits: 0, totalPRs: 0, reviewsGiven: 0,
-  issuesOpened: 0, totalContributions: 0, calendar: [], longestStreak: 0, currentStreak: 0,
-  maxCommitsInOneDay: 0, weekendCommitRatio: 0, nightCommitRatio: null,
+  followers: 0,
+  contributedRepoCount: 0,
+  mergedPRs: 0,
+  repoCount: 0,
+  totalStars: 0,
+  languageCount: 0,
+  topLanguages: [],
+  totalCommits: 0,
+  totalPRs: 0,
+  reviewsGiven: 0,
+  issuesOpened: 0,
+  totalContributions: 0,
+  calendar: [],
+  longestStreak: 0,
+  currentStreak: 0,
+  maxCommitsInOneDay: 0,
+  weekendCommitRatio: 0,
+  nightCommitRatio: null,
 };
-const fetchUserStats = async ({ username }) => ({ ...zero, login: username, ...(statsByUser[username] ?? {}) });
+const fetchUserStats = async ({ username }) => ({
+  ...zero,
+  login: username,
+  ...(statsByUser[username] ?? {}),
+});
 
 beforeAll(async () => {
   app = await buildTestApp({ fetchUserStats });
@@ -69,7 +91,11 @@ describe('POST /admin/cohorts', () => {
       payload: { name: 'Winter 2025', slug: 'winter-2025', startDate: '2025-06-01' },
     });
     expect(res.statusCode).toBe(201);
-    expect(res.json().cohort).toMatchObject({ slug: 'winter-2025', name: 'Winter 2025', isActive: true });
+    expect(res.json().cohort).toMatchObject({
+      slug: 'winter-2025',
+      name: 'Winter 2025',
+      isActive: true,
+    });
   });
 
   it('rejects a duplicate slug with 409', async () => {
@@ -101,9 +127,16 @@ describe('POST /admin/sync/:slug', () => {
     const bob = await makeMember({ githubUsername: 'bob', zid: 'z1000002' });
     await makeMembership(alice.id, cohort.id);
     await makeMembership(bob.id, cohort.id);
-    statsByUser = { alice: { totalCommits: 120, totalContributions: 130 }, bob: { totalCommits: 20 } };
+    statsByUser = {
+      alice: { totalCommits: 120, totalContributions: 130 },
+      bob: { totalCommits: 20 },
+    };
 
-    const res = await app.inject({ method: 'POST', url: '/admin/sync/sync-me', headers: adminHeaders });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/sync/sync-me',
+      headers: adminHeaders,
+    });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.sync.membersSynced).toBe(2);
@@ -136,9 +169,15 @@ describe('DELETE /admin/members/:username', () => {
 
     // Alice holds the record before deletion.
     let titlesRes = await app.inject({ method: 'GET', url: '/cohorts/del/titles' });
-    expect(titlesRes.json().records.find((r) => r.key === 'most_commits').holder.member.githubUsername).toBe('alice');
+    expect(
+      titlesRes.json().records.find((r) => r.key === 'most_commits').holder.member.githubUsername,
+    ).toBe('alice');
 
-    const del = await app.inject({ method: 'DELETE', url: '/admin/members/alice', headers: adminHeaders });
+    const del = await app.inject({
+      method: 'DELETE',
+      url: '/admin/members/alice',
+      headers: adminHeaders,
+    });
     expect(del.statusCode).toBe(200);
     expect(del.json()).toMatchObject({ deleted: 'alice', reevaluatedCohorts: 1 });
 
@@ -148,11 +187,17 @@ describe('DELETE /admin/members/:username', () => {
 
     // The record transferred to Bob.
     titlesRes = await app.inject({ method: 'GET', url: '/cohorts/del/titles' });
-    expect(titlesRes.json().records.find((r) => r.key === 'most_commits').holder.member.githubUsername).toBe('bob');
+    expect(
+      titlesRes.json().records.find((r) => r.key === 'most_commits').holder.member.githubUsername,
+    ).toBe('bob');
   });
 
   it('404s for an unknown member', async () => {
-    const res = await app.inject({ method: 'DELETE', url: '/admin/members/ghost', headers: adminHeaders });
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/admin/members/ghost',
+      headers: adminHeaders,
+    });
     expect(res.statusCode).toBe(404);
   });
 

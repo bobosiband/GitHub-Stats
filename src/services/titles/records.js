@@ -136,7 +136,8 @@ export const RECORD_RULES = [
   {
     key: 'night_owl',
     name: 'Night Owl',
-    description: 'Highest share of commits made at night (22:00–06:00), for members with a registered repo.',
+    description:
+      'Highest share of commits made at night (22:00–06:00), for members with a registered repo.',
     flavor: 'Ships best after midnight.',
     stat: 'nightCommitRatio',
     getValue: (s) => s.nightCommitRatio, // null when there is no repo data → ineligible
