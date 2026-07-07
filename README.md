@@ -79,6 +79,7 @@ exits with a readable message if anything is missing or malformed.
 | `HOST`         | no       | `0.0.0.0`     | Bind host.                                                          |
 | `LOG_LEVEL`    | no       | `info`        | `fatal`/`error`/`warn`/`info`/`debug`/`trace`/`silent`.             |
 | `ENABLE_CRON`  | no       | `true`        | Set `false` to build the app without scheduling the sync.           |
+| `CORS_ORIGIN`  | no       | `http://localhost:5173` | Comma-separated origins allowed to call the API from a browser. |
 | `NODE_ENV`     | no       | `development` | `test` disables the logger.                                         |
 
 ## npm scripts

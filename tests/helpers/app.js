@@ -15,6 +15,12 @@ export async function buildTestApp(opts = {}) {
     logger: false,
     fetchUserStats: opts.fetchUserStats ?? notStubbed('fetchUserStats'),
     verifyGithubUser: opts.verifyGithubUser ?? notStubbed('verifyGithubUser'),
+    // Effectively disable rate limits for non-rate-limit tests; the dedicated
+    // rate-limit test overrides these with small values.
+    rateLimitGlobalMax: opts.rateLimitGlobalMax ?? 100_000,
+    rateLimitGlobalWindow: opts.rateLimitGlobalWindow ?? '1 minute',
+    rateLimitJoinMax: opts.rateLimitJoinMax ?? 100_000,
+    rateLimitJoinWindow: opts.rateLimitJoinWindow ?? '1 minute',
   });
   await app.ready();
   return app;

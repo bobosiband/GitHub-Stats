@@ -9,3 +9,4 @@ process.env.GITHUB_TOKEN = process.env.GITHUB_TOKEN ?? 'test-token';
 process.env.ADMIN_TOKEN = 'test-admin-token';
 process.env.ENABLE_CRON = 'false';
 process.env.LOG_LEVEL = 'silent';
+process.env.CORS_ORIGIN = process.env.CORS_ORIGIN ?? 'http://localhost:5173';

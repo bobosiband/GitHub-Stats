@@ -21,6 +21,11 @@ enum TitleKind {
   BADGE
 }
 
+enum CohortKind {
+  PROGRAM
+  GLOBAL
+}
+
 model Member {
   id               String   @id @default(cuid())
   githubUsername   String   @unique
@@ -39,13 +44,14 @@ model Member {
 }
 
 model Cohort {
-  id        String    @id @default(cuid())
+  id        String     @id @default(cuid())
   name      String
-  slug      String    @unique
+  slug      String     @unique
+  kind      CohortKind @default(PROGRAM)
   startDate DateTime
   endDate   DateTime?
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
 
   memberships Membership[]
   snapshots   StatSnapshot[]
