@@ -213,6 +213,34 @@ to the most recent 365 days with a warning if a cohort ever exceeds a year). Tit
 program cohorts and `global` are independent — the same member can hold `most_commits`
 in both.
 
+## Docker (local smoke run)
+
+The image is multi-stage (`node:20-alpine`), copies only prod deps + source, and
+generates the Prisma client at build. `CMD` runs `npm run start:deploy` — which
+executes `prisma migrate deploy` (idempotent, non-destructive) then boots the
+server. Seeding is manual (`npm run db:seed`) and never runs automatically.
+
+```bash
+# 1. Postgres up (compose exposes it on host :5432)
+docker compose up -d
+
+# 2. Build
+docker build -t gitrank-backend:local .
+
+# 3. Run against the compose Postgres. host.docker.internal resolves to the
+#    host on Docker Desktop; on Linux use --network host or the compose network.
+docker run --rm -p 3000:3000 \
+  -e DATABASE_URL="postgresql://gitrank:gitrank@host.docker.internal:5432/gitrank?schema=public" \
+  -e GITHUB_TOKEN="$GITHUB_TOKEN" \
+  -e ADMIN_TOKEN="$ADMIN_TOKEN" \
+  -e CORS_ORIGIN="http://localhost:5173" \
+  -e ENABLE_CRON=false \
+  gitrank-backend:local
+
+# 4. Verify
+curl localhost:3000/health
+```
+
 ## Testing
 
 Vitest, with the GitHub layer mocked (no real network). Tests run against a dedicated

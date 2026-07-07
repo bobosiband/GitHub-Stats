@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: gitrank-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Point at Neon (or another managed Postgres) — NOT Render's free
+      # Postgres, which is deleted after ~90 days. Use the pooled connection
+      # string with `sslmode=require`.
+      - key: DATABASE_URL
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: ADMIN_TOKEN
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      # Free tier sleeps when idle → rely on the GitHub Actions sync workflow
+      # to both wake and trigger the runner. Flip to `true` on the paid tier.
+      - key: ENABLE_CRON
+        value: 'false'
+      - key: NODE_ENV
+        value: production

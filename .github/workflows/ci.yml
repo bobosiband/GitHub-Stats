@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: lint + test (node 20)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gitrank
+          POSTGRES_PASSWORD: gitrank
+          POSTGRES_DB: gitrank_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U gitrank -d gitrank_test"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
+
+    env:
+      DATABASE_URL: postgresql://gitrank:gitrank@localhost:5432/gitrank_test?schema=public
+      GITHUB_TOKEN: ci-github-token
+      ADMIN_TOKEN: ci-admin-token
+      CORS_ORIGIN: http://localhost:5173
+      ENABLE_CRON: 'false'
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Apply schema to the CI database
+        run: npx prisma migrate deploy
+
+      - run: npm run lint
+
+      - run: npm test

@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
+    "start:deploy": "prisma migrate deploy && node src/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -37,6 +38,7 @@
     "fastify": "^5.2.0",
     "fastify-plugin": "^5.1.0",
     "node-cron": "^3.0.3",
+    "prisma": "^6.1.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
@@ -46,7 +48,6 @@
     "eslint-config-prettier": "^9.1.0",
     "globals": "^15.14.0",
     "prettier": "^3.4.2",
-    "prisma": "^6.1.0",
     "vitest": "^2.1.8"
   }
 }

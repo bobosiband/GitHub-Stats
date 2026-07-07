@@ -1,0 +1,32 @@
+name: Scheduled sync
+
+# External trigger for GitRank's sync + title-eval runner. Fires every 3 hours
+# so the deployed service picks up new snapshots — and, on free tiers where the
+# service sleeps when idle, the curl both wakes it up and triggers the work.
+
+on:
+  schedule:
+    - cron: '0 */3 * * *'
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    name: POST /admin/sync-all
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger sync-all
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APP_URL:-}" ] || [ -z "${ADMIN_TOKEN:-}" ]; then
+            echo "APP_URL and ADMIN_TOKEN repo secrets must be set." >&2
+            exit 1
+          fi
+          # `--fail-with-body` returns non-zero on 4xx/5xx while still showing the response body.
+          curl --fail-with-body --silent --show-error \
+            --max-time 300 \
+            -X POST "${APP_URL%/}/admin/sync-all" \
+            -H "Authorization: Bearer ${ADMIN_TOKEN}" \
+            -H "Content-Type: application/json"
