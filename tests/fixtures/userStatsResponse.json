@@ -1,0 +1,74 @@
+{
+  "user": {
+    "id": "MDQ6VXNlcjEyMzQ1",
+    "databaseId": 12345,
+    "login": "octostudent",
+    "name": "Octo Student",
+    "avatarUrl": "https://avatars.githubusercontent.com/u/12345?v=4",
+    "createdAt": "2019-06-15T08:00:00Z",
+    "followers": { "totalCount": 42 },
+    "repositoriesContributedTo": { "totalCount": 7 },
+    "mergedPullRequests": { "totalCount": 18 },
+    "repositories": {
+      "totalCount": 3,
+      "nodes": [
+        {
+          "name": "cool-project",
+          "stargazerCount": 30,
+          "languages": {
+            "edges": [
+              { "size": 10000, "node": { "name": "JavaScript" } },
+              { "size": 5000, "node": { "name": "TypeScript" } }
+            ]
+          }
+        },
+        {
+          "name": "another-app",
+          "stargazerCount": 12,
+          "languages": {
+            "edges": [
+              { "size": 8000, "node": { "name": "TypeScript" } },
+              { "size": 2000, "node": { "name": "CSS" } }
+            ]
+          }
+        },
+        {
+          "name": "scripts",
+          "stargazerCount": 0,
+          "languages": {
+            "edges": [{ "size": 3000, "node": { "name": "Python" } }]
+          }
+        }
+      ]
+    },
+    "contributionsCollection": {
+      "totalCommitContributions": 30,
+      "totalPullRequestContributions": 4,
+      "totalPullRequestReviewContributions": 2,
+      "totalIssueContributions": 3,
+      "contributionCalendar": {
+        "totalContributions": 36,
+        "weeks": [
+          {
+            "contributionDays": [
+              { "date": "2025-03-01", "contributionCount": 5 },
+              { "date": "2025-03-02", "contributionCount": 3 },
+              { "date": "2025-03-03", "contributionCount": 2 },
+              { "date": "2025-03-04", "contributionCount": 0 },
+              { "date": "2025-03-05", "contributionCount": 7 },
+              { "date": "2025-03-06", "contributionCount": 4 },
+              { "date": "2025-03-07", "contributionCount": 1 }
+            ]
+          },
+          {
+            "contributionDays": [
+              { "date": "2025-03-08", "contributionCount": 6 },
+              { "date": "2025-03-09", "contributionCount": 0 },
+              { "date": "2025-03-10", "contributionCount": 8 }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
