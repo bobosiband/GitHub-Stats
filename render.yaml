@@ -3,6 +3,9 @@ services:
     name: gitrank-backend
     runtime: docker
     plan: free
+    # The backend lives under Backend/ in this monorepo. rootDir scopes Render's
+    # build context, so `dockerfilePath` is resolved from inside Backend/.
+    rootDir: Backend
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
     autoDeploy: true
