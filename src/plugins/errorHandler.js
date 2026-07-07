@@ -67,11 +67,9 @@ async function errorHandlerPlugin(fastify) {
 
   // Consistent 404 shape for unmatched routes.
   fastify.setNotFoundHandler((request, reply) => {
-    reply
-      .code(404)
-      .send({
-        error: { code: 'NOT_FOUND', message: `Route ${request.method} ${request.url} not found` },
-      });
+    reply.code(404).send({
+      error: { code: 'NOT_FOUND', message: `Route ${request.method} ${request.url} not found` },
+    });
   });
 }
 
