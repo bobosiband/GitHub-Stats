@@ -1,0 +1,30 @@
+# Local Postgres for GitRank. Brings up two databases:
+#   - gitrank       (dev / seed / running the server)
+#   - gitrank_test  (used by the test suite; created by init script below)
+#
+#   docker compose up -d
+#   npm run db:migrate      # apply migrations to gitrank
+#   npm run db:seed
+#
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: gitrank-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gitrank
+      POSTGRES_PASSWORD: gitrank
+      POSTGRES_DB: gitrank
+    ports:
+      - "5432:5432"
+    volumes:
+      - gitrank-pgdata:/var/lib/postgresql/data
+      - ./scripts/init-test-db.sh:/docker-entrypoint-initdb.d/init-test-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gitrank -d gitrank"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  gitrank-pgdata:

@@ -1,0 +1,140 @@
+// GitRank data model.
+// Snapshots are append-only; "current stats" = latest StatSnapshot per (member, cohort).
+// Deleting a Member cascades to memberships, snapshots, and title awards.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PARTICIPANT
+  ORGANISER
+}
+
+enum TitleKind {
+  RECORD
+  BADGE
+}
+
+model Member {
+  id               String   @id @default(cuid())
+  githubUsername   String   @unique
+  zid              String   @unique
+  githubId         Int?
+  displayName      String?
+  avatarUrl        String?
+  accountCreatedAt DateTime?
+  createdAt        DateTime @default(now())
+
+  memberships Membership[]
+  snapshots   StatSnapshot[]
+  awards      TitleAward[]
+
+  @@index([githubUsername])
+}
+
+model Cohort {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  startDate DateTime
+  endDate   DateTime?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  memberships Membership[]
+  snapshots   StatSnapshot[]
+  awards      TitleAward[]
+}
+
+model Membership {
+  id       String   @id @default(cuid())
+  memberId String
+  cohortId String
+  role     Role     @default(PARTICIPANT)
+  joinedAt DateTime @default(now())
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  cohort Cohort @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+
+  programRepos ProgramRepo[]
+
+  @@unique([memberId, cohortId])
+}
+
+model ProgramRepo {
+  id           String @id @default(cuid())
+  membershipId String
+  owner        String
+  name         String
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, owner, name])
+}
+
+model StatSnapshot {
+  id         String   @id @default(cuid())
+  memberId   String
+  cohortId   String
+  capturedAt DateTime @default(now())
+
+  totalCommits         Int
+  totalContributions   Int
+  totalPRs             Int
+  mergedPRs            Int
+  reviewsGiven         Int
+  issuesOpened         Int
+  followers            Int
+  totalStars           Int
+  repoCount            Int
+  contributedRepoCount Int
+  languageCount        Int
+  topLanguages         Json
+  longestStreak        Int
+  currentStreak        Int
+  maxCommitsInOneDay   Int
+  weekendCommitRatio   Float
+  nightCommitRatio     Float?
+  calendar             Json
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  cohort Cohort @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, cohortId, capturedAt])
+  @@index([cohortId, capturedAt])
+}
+
+model Title {
+  id          String    @id @default(cuid())
+  key         String    @unique
+  name        String
+  description String
+  kind        TitleKind
+  flavor      String?
+
+  awards TitleAward[]
+}
+
+model TitleAward {
+  id        String    @id @default(cuid())
+  titleId   String
+  memberId  String
+  cohortId  String
+  awardedAt DateTime  @default(now())
+  revokedAt DateTime?
+  value     Json
+
+  title  Title  @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  cohort Cohort @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+
+  @@index([titleId, cohortId, revokedAt])
+  @@index([memberId, revokedAt])
+  @@index([cohortId])
+}

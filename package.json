@@ -1,0 +1,47 @@
+{
+  "name": "gitrank-backend",
+  "version": "0.1.0",
+  "description": "Backend for GitRank — tracks GitHub activity of DevSoc training-program members, ranks them, and awards titles.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:push": "prisma db push",
+    "db:seed": "node prisma/seed.js",
+    "db:reset": "prisma migrate reset --force"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
+  "dependencies": {
+    "@octokit/graphql": "^8.1.1",
+    "@prisma/client": "^6.1.0",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.0",
+    "fastify-plugin": "^5.1.0",
+    "node-cron": "^3.0.3",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@vitest/coverage-v8": "^2.1.8",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^9.1.0",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.2",
+    "prisma": "^6.1.0",
+    "vitest": "^2.1.8"
+  }
+}
