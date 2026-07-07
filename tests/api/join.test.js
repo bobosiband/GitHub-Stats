@@ -49,12 +49,15 @@ describe('POST /cohorts/:slug/join', () => {
       zid: 'z9000001',
       displayName: 'New Bie',
     });
-    expect(body.cohorts).toHaveLength(1);
-    expect(body.cohorts[0].cohort.slug).toBe('open');
-    expect(body.cohorts[0].programRepos).toEqual([{ owner: 'newbie', name: 'project' }]);
+    // Program cohort + auto-added global cohort.
+    expect(body.cohorts).toHaveLength(2);
+    const openCohort = body.cohorts.find((c) => c.cohort.slug === 'open');
+    expect(openCohort.programRepos).toEqual([{ owner: 'newbie', name: 'project' }]);
+    expect(body.cohorts.map((c) => c.cohort.slug).sort()).toEqual(['global', 'open']);
 
     expect(await prisma.member.count()).toBe(1);
-    expect(await prisma.membership.count()).toBe(1);
+    // 1 for the program cohort, 1 for the global cohort.
+    expect(await prisma.membership.count()).toBe(2);
     expect(await prisma.programRepo.count()).toBe(1);
   });
 
@@ -150,7 +153,12 @@ describe('POST /cohorts/:slug/join', () => {
     expect(await prisma.member.count()).toBe(1);
 
     const body = second.json();
-    expect(body.cohorts.map((c) => c.cohort.slug).sort()).toEqual(['a-cohort', 'b-cohort']);
+    // Program A + Program B + auto-added global.
+    expect(body.cohorts.map((c) => c.cohort.slug).sort()).toEqual([
+      'a-cohort',
+      'b-cohort',
+      'global',
+    ]);
     // Old title from cohort A is preserved and still active.
     const machine = body.titles.find((t) => t.key === 'most_commits');
     expect(machine).toBeTruthy();
@@ -167,5 +175,48 @@ describe('POST /cohorts/:slug/join', () => {
     const original = await prisma.member.findUnique({ where: { zid: 'z9000007' } });
     expect(original.githubUsername).toBe('linka');
     expect(await prisma.member.findUnique({ where: { githubUsername: 'linkb' } })).toBeNull();
+  });
+
+  it('auto-adds the joiner to the global cohort in the same transaction', async () => {
+    await makeCohort({ slug: 'open', isActive: true });
+    const res = await join('open', { githubUsername: 'joiner', zid: 'z9000020' });
+    expect(res.statusCode).toBe(201);
+
+    const member = await prisma.member.findUnique({
+      where: { githubUsername: 'joiner' },
+      include: { memberships: { include: { cohort: true } } },
+    });
+    const slugs = member.memberships.map((m) => m.cohort.slug).sort();
+    expect(slugs).toEqual(['global', 'open']);
+    expect(member.memberships.find((m) => m.cohort.slug === 'global').cohort.kind).toBe('GLOBAL');
+  });
+
+  it('joining `global` directly creates exactly one membership (no dupe)', async () => {
+    const res = await join('global', { githubUsername: 'globalist', zid: 'z9000021' });
+    expect(res.statusCode).toBe(201);
+    const member = await prisma.member.findUnique({
+      where: { githubUsername: 'globalist' },
+      include: { memberships: true },
+    });
+    expect(member.memberships).toHaveLength(1);
+  });
+
+  it('joining `global` then a program cohort does not duplicate global membership', async () => {
+    const globalRes = await join('global', { githubUsername: 'twicein', zid: 'z9000022' });
+    expect(globalRes.statusCode).toBe(201);
+
+    await makeCohort({ slug: 'later-program', isActive: true });
+    const programRes = await join('later-program', {
+      githubUsername: 'twicein',
+      zid: 'z9000022',
+    });
+    expect(programRes.statusCode).toBe(201);
+
+    const member = await prisma.member.findUnique({
+      where: { githubUsername: 'twicein' },
+      include: { memberships: { include: { cohort: true } } },
+    });
+    const slugs = member.memberships.map((m) => m.cohort.slug).sort();
+    expect(slugs).toEqual(['global', 'later-program']);
   });
 });

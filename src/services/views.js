@@ -47,6 +47,7 @@ export function serializeCohort(cohort, extra = {}) {
   return {
     slug: cohort.slug,
     name: cohort.name,
+    kind: cohort.kind,
     startDate: cohort.startDate,
     endDate: cohort.endDate,
     isActive: cohort.isActive,

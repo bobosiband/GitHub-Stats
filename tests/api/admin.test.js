@@ -206,4 +206,33 @@ describe('DELETE /admin/members/:username', () => {
     const res = await app.inject({ method: 'DELETE', url: `/admin/members/${m.githubUsername}` });
     expect(res.statusCode).toBe(401);
   });
+
+  it('re-evaluates the global cohort when a joined member is deleted', async () => {
+    // Two members on the global cohort with a snapshot each; Alice leads.
+    const globalCohort = await prisma.cohort.findUnique({ where: { slug: 'global' } });
+    const alice = await makeMember({ githubUsername: 'ga', zid: 'z1200001' });
+    const bob = await makeMember({ githubUsername: 'gb', zid: 'z1200002' });
+    await makeMembership(alice.id, globalCohort.id);
+    await makeMembership(bob.id, globalCohort.id);
+    await makeSnapshot(alice.id, globalCohort.id, { totalCommits: 200, totalContributions: 250 });
+    await makeSnapshot(bob.id, globalCohort.id, { totalCommits: 60, totalContributions: 80 });
+    await evaluateCohort({ prisma, cohortId: globalCohort.id });
+
+    let titlesRes = await app.inject({ method: 'GET', url: '/cohorts/global/titles' });
+    expect(
+      titlesRes.json().records.find((r) => r.key === 'most_commits').holder.member.githubUsername,
+    ).toBe('ga');
+
+    const del = await app.inject({
+      method: 'DELETE',
+      url: '/admin/members/ga',
+      headers: adminHeaders,
+    });
+    expect(del.statusCode).toBe(200);
+
+    titlesRes = await app.inject({ method: 'GET', url: '/cohorts/global/titles' });
+    expect(
+      titlesRes.json().records.find((r) => r.key === 'most_commits').holder.member.githubUsername,
+    ).toBe('gb');
+  });
 });

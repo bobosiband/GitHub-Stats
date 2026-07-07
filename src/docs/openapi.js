@@ -39,9 +39,10 @@ export const openapiDocument = {
     title: 'GitRank API',
     version: '0.1.0',
     description:
-      'Tracks the GitHub activity of DevSoc training-program members, ranks them on ' +
-      'leaderboards, and awards titles (records + badges). Reads are public; `/admin/*` ' +
-      'routes require a static bearer token.',
+      'Tracks GitHub activity of members across cohorts, ranks them on leaderboards, ' +
+      'and awards titles (records + badges). Every joiner is also auto-added to the ' +
+      'always-on `global` cohort, which uses a rolling 365-day window. Reads are ' +
+      'public; `/admin/*` routes require a static bearer token.',
   },
   servers: [{ url: 'http://localhost:3000', description: 'Local development' }],
   tags: [
@@ -100,6 +101,13 @@ export const openapiDocument = {
         properties: {
           slug: { type: 'string', example: 'devsoc-2025' },
           name: { type: 'string', example: 'DevSoc Training Program 2025' },
+          kind: {
+            type: 'string',
+            enum: ['PROGRAM', 'GLOBAL'],
+            description:
+              'PROGRAM cohorts are time-boxed training cohorts. The single GLOBAL cohort ' +
+              '(slug `global`) covers every joiner across a rolling 365-day window.',
+          },
           startDate: { type: 'string', format: 'date-time' },
           endDate: { type: 'string', format: 'date-time', nullable: true },
           isActive: { type: 'boolean' },

@@ -1,6 +1,7 @@
 import { ConflictError, ForbiddenError, UnprocessableError } from '../lib/errors.js';
 import { GithubUserNotFoundError } from './github/fetchUserStats.js';
 import { getCohortBySlugOrThrow } from './views.js';
+import { GLOBAL_COHORT_SLUG } from './global.js';
 
 /**
  * Public self-serve join. Strictly opt-in: creates (or reuses) a Member and adds
@@ -85,6 +86,20 @@ export async function joinCohort({ prisma, verifyGithubUser, slug, input, now = 
       await tx.programRepo.create({
         data: { membershipId: membership.id, owner: programRepo.owner, name: programRepo.name },
       });
+    }
+
+    // Auto-membership: every joiner also lands on the singleton global cohort
+    // (unless they're joining IT directly). `upsert` on the (memberId, cohortId)
+    // unique constraint makes this a no-op for members already on it.
+    if (cohort.slug !== GLOBAL_COHORT_SLUG) {
+      const globalCohort = await tx.cohort.findUnique({ where: { slug: GLOBAL_COHORT_SLUG } });
+      if (globalCohort) {
+        await tx.membership.upsert({
+          where: { memberId_cohortId: { memberId: m.id, cohortId: globalCohort.id } },
+          update: {},
+          create: { memberId: m.id, cohortId: globalCohort.id },
+        });
+      }
     }
 
     return m;

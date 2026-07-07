@@ -1,6 +1,7 @@
 import { buildApp } from './app.js';
 import { config } from './config.js';
 import { ensureTitles } from './services/titles/engine.js';
+import { ensureGlobalCohort } from './services/global.js';
 import { registerSyncJob } from './jobs/syncJob.js';
 
 /** Entrypoint: build the app, seed title definitions, schedule the sync, and listen. */
@@ -8,6 +9,8 @@ const app = await buildApp();
 
 // Make sure the Title table reflects the current definitions on every boot.
 await ensureTitles(app.prisma);
+// Guarantee the singleton global cohort exists.
+await ensureGlobalCohort(app.prisma);
 
 let job = null;
 if (config.ENABLE_CRON) {

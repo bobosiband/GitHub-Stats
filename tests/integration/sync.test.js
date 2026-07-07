@@ -165,6 +165,64 @@ describe('syncCohort', () => {
   });
 });
 
+describe('global cohort sync', () => {
+  it('awards global titles independently from program titles for the same member', async () => {
+    const NOW = new Date('2026-06-01T00:00:00Z');
+    // Keep the program window shorter than a year so it doesn't clamp into the
+    // same trailing-year window the global cohort uses.
+    const program = await makeCohort({
+      slug: 'prog-A',
+      isActive: true,
+      startDate: new Date('2026-03-01T00:00:00Z'),
+    });
+    const global = await prisma.cohort.findUnique({ where: { slug: 'global' } });
+    const alice = await makeMember({ githubUsername: 'alice', zid: 'z1111111' });
+    const bob = await makeMember({ githubUsername: 'bob', zid: 'z2222222' });
+    await makeMembership(alice.id, program.id);
+    await makeMembership(bob.id, program.id);
+    // Alice + Bob are on the global cohort too. Alice leads program on commits;
+    // Bob is the global leader (his trailing-year total is higher, e.g. work on
+    // repos outside the program). We fake distinct stats per (cohort, user) via
+    // the `since` window value → cohort mapping in the fetcher.
+    await makeMembership(alice.id, global.id);
+    await makeMembership(bob.id, global.id);
+
+    const fetchUserStats = async ({ username, since }) => {
+      // GLOBAL uses a rolling 365d window (since = now - 1y); PROGRAM uses cohort dates.
+      const isGlobal = since.getTime() === NOW.getTime() - 365 * 24 * 60 * 60 * 1000;
+      if (isGlobal) {
+        // Global: Bob wins on commits (rolling year totals).
+        return stats({
+          totalCommits: username === 'bob' ? 900 : 250,
+          totalContributions: username === 'bob' ? 1100 : 300,
+        });
+      }
+      // Program: Alice wins on commits.
+      return stats({
+        totalCommits: username === 'alice' ? 400 : 40,
+        totalContributions: username === 'alice' ? 450 : 50,
+      });
+    };
+
+    await syncCohort({ prisma, fetchUserStats, cohortId: program.id, now: NOW, delayMs: 0 });
+    await syncCohort({ prisma, fetchUserStats, cohortId: global.id, now: NOW, delayMs: 0 });
+    await evaluateCohort({ prisma, cohortId: program.id, now: NOW });
+    await evaluateCohort({ prisma, cohortId: global.id, now: NOW });
+
+    const title = await prisma.title.findUnique({ where: { key: 'most_commits' } });
+
+    const programHolder = await prisma.titleAward.findFirst({
+      where: { titleId: title.id, cohortId: program.id, revokedAt: null },
+    });
+    expect(programHolder.memberId).toBe(alice.id);
+
+    const globalHolder = await prisma.titleAward.findFirst({
+      where: { titleId: title.id, cohortId: global.id, revokedAt: null },
+    });
+    expect(globalHolder.memberId).toBe(bob.id);
+  });
+});
+
 describe('syncMember & syncAllActive', () => {
   it('syncs a single member', async () => {
     const cohort = await makeCohort();
@@ -196,8 +254,11 @@ describe('syncMember & syncAllActive', () => {
     });
     const summaries = await syncAllActive({ prisma, fetchUserStats, now: NOW, delayMs: 0 });
 
-    expect(summaries).toHaveLength(1);
-    expect(summaries[0].cohortId).toBe(active.id);
+    // The always-on global cohort is also active but has zero members here, so it
+    // contributes a zero-work summary alongside the real one.
+    const nonGlobal = summaries.filter((s) => s.cohortSlug !== 'global');
+    expect(nonGlobal).toHaveLength(1);
+    expect(nonGlobal[0].cohortId).toBe(active.id);
     expect(await prisma.statSnapshot.count({ where: { cohortId: inactive.id } })).toBe(0);
   });
 });

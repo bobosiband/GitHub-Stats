@@ -190,6 +190,28 @@ awarding it. It is idempotent — evaluating twice changes nothing.
   the title definitions); I/O lives at the edges (sync, routes, engine persistence).
 - Snapshots are **append-only**, giving progress history for free.
 
+## Global Leaderboard
+
+GitRank ships with a single always-on **global cohort** (slug `global`, `kind: GLOBAL`).
+Every member who joins any cohort is auto-added to it in the same transaction; joining
+`global` directly also works. It reuses all the existing plumbing:
+
+- `GET /cohorts/global/leaderboard` — ranked members across everyone who has ever joined,
+- `GET /cohorts/global/titles` — records + badges scoped to the global cohort,
+- `POST /admin/sync/global` — manual sync/eval, same shape as any other cohort.
+
+**Rolling window.** GitHub's `contributionsCollection` window is capped at ~one year, and
+handing early joiners a permanent lead would kill the leaderboard within a trimester. So
+the global cohort ranks the **last 365 days** of activity — the window slides forward on
+every sync (`syncWindowForCohort` in [`src/services/sync.js`](src/services/sync.js)).
+Titles held on `global` are therefore **rolling records** — an old holder can lose it
+without a challenger simply because their year-ago work fell out of the window.
+
+Program cohorts are unaffected: they still use `[startDate, min(endDate, now)]` (clamped
+to the most recent 365 days with a warning if a cohort ever exceeds a year). Titles on
+program cohorts and `global` are independent — the same member can hold `most_commits`
+in both.
+
 ## Testing
 
 Vitest, with the GitHub layer mocked (no real network). Tests run against a dedicated

@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { TEST_DATABASE_URL } from './testDbUrl.js';
+import { ensureGlobalCohort } from '../../src/services/global.js';
 
 let prisma;
 
@@ -11,12 +12,16 @@ export function getPrisma() {
   return prisma;
 }
 
-/** Truncate every table between tests for isolation. */
+/**
+ * Truncate every table between tests for isolation, then re-create the global
+ * cohort so `joinCohort`'s auto-membership can always find it.
+ */
 export async function resetDb() {
   const db = getPrisma();
   await db.$executeRawUnsafe(
     'TRUNCATE "TitleAward","StatSnapshot","ProgramRepo","Membership","Title","Member","Cohort" RESTART IDENTITY CASCADE',
   );
+  await ensureGlobalCohort(db);
 }
 
 export async function disconnectDb() {

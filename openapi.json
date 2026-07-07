@@ -3,7 +3,7 @@
   "info": {
     "title": "GitRank API",
     "version": "0.1.0",
-    "description": "Tracks the GitHub activity of DevSoc training-program members, ranks them on leaderboards, and awards titles (records + badges). Reads are public; `/admin/*` routes require a static bearer token."
+    "description": "Tracks GitHub activity of members across cohorts, ranks them on leaderboards, and awards titles (records + badges). Every joiner is also auto-added to the always-on `global` cohort, which uses a rolling 365-day window. Reads are public; `/admin/*` routes require a static bearer token."
   },
   "servers": [
     {
@@ -48,11 +48,16 @@
     "schemas": {
       "Error": {
         "type": "object",
-        "required": ["error"],
+        "required": [
+          "error"
+        ],
         "properties": {
           "error": {
             "type": "object",
-            "required": ["code", "message"],
+            "required": [
+              "code",
+              "message"
+            ],
             "properties": {
               "code": {
                 "type": "string",
@@ -90,7 +95,10 @@
           },
           "db": {
             "type": "string",
-            "enum": ["up", "down"],
+            "enum": [
+              "up",
+              "down"
+            ],
             "example": "up"
           },
           "lastSyncAt": {
@@ -114,6 +122,14 @@
           "name": {
             "type": "string",
             "example": "DevSoc Training Program 2025"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "PROGRAM",
+              "GLOBAL"
+            ],
+            "description": "PROGRAM cohorts are time-boxed training cohorts. The single GLOBAL cohort (slug `global`) covers every joiner across a rolling 365-day window."
           },
           "startDate": {
             "type": "string",
@@ -271,7 +287,12 @@
           },
           "sort": {
             "type": "string",
-            "enum": ["commits", "contributions", "streak", "stars"]
+            "enum": [
+              "commits",
+              "contributions",
+              "streak",
+              "stars"
+            ]
           },
           "sortField": {
             "type": "string",
@@ -394,7 +415,10 @@
           },
           "kind": {
             "type": "string",
-            "enum": ["RECORD", "BADGE"]
+            "enum": [
+              "RECORD",
+              "BADGE"
+            ]
           },
           "flavor": {
             "type": "string",
@@ -473,7 +497,10 @@
                 },
                 "role": {
                   "type": "string",
-                  "enum": ["PARTICIPANT", "ORGANISER"]
+                  "enum": [
+                    "PARTICIPANT",
+                    "ORGANISER"
+                  ]
                 },
                 "joinedAt": {
                   "type": "string",
@@ -516,7 +543,10 @@
       },
       "JoinRequest": {
         "type": "object",
-        "required": ["githubUsername", "zid"],
+        "required": [
+          "githubUsername",
+          "zid"
+        ],
         "properties": {
           "githubUsername": {
             "type": "string",
@@ -542,7 +572,10 @@
               },
               {
                 "type": "object",
-                "required": ["owner", "name"],
+                "required": [
+                  "owner",
+                  "name"
+                ],
                 "properties": {
                   "owner": {
                     "type": "string"
@@ -559,7 +592,11 @@
       },
       "CreateCohortRequest": {
         "type": "object",
-        "required": ["name", "slug", "startDate"],
+        "required": [
+          "name",
+          "slug",
+          "startDate"
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -651,7 +688,9 @@
   "paths": {
     "/health": {
       "get": {
-        "tags": ["System"],
+        "tags": [
+          "System"
+        ],
         "summary": "Health check",
         "description": "Reports DB connectivity and the most recent snapshot time.",
         "responses": {
@@ -670,7 +709,9 @@
     },
     "/cohorts": {
       "get": {
-        "tags": ["Cohorts"],
+        "tags": [
+          "Cohorts"
+        ],
         "summary": "List cohorts",
         "responses": {
           "200": {
@@ -688,7 +729,9 @@
     },
     "/cohorts/{slug}": {
       "get": {
-        "tags": ["Cohorts"],
+        "tags": [
+          "Cohorts"
+        ],
         "summary": "Get cohort detail",
         "parameters": [
           {
@@ -728,7 +771,9 @@
     },
     "/cohorts/{slug}/leaderboard": {
       "get": {
-        "tags": ["Leaderboard"],
+        "tags": [
+          "Leaderboard"
+        ],
         "summary": "Ranked members",
         "parameters": [
           {
@@ -747,7 +792,12 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["commits", "contributions", "streak", "stars"],
+              "enum": [
+                "commits",
+                "contributions",
+                "streak",
+                "stars"
+              ],
               "default": "commits"
             },
             "description": "Stat to rank by."
@@ -789,7 +839,9 @@
     },
     "/cohorts/{slug}/titles": {
       "get": {
-        "tags": ["Titles"],
+        "tags": [
+          "Titles"
+        ],
         "summary": "Cohort titles with holders/earners",
         "parameters": [
           {
@@ -829,7 +881,9 @@
     },
     "/cohorts/{slug}/join": {
       "post": {
-        "tags": ["Cohorts"],
+        "tags": [
+          "Cohorts"
+        ],
         "summary": "Public self-serve join",
         "description": "Verifies the GitHub user exists and adds them to the cohort. Reuses an existing member on an exact (zid, githubUsername) match; never silently re-links a zid to a different username.",
         "parameters": [
@@ -920,7 +974,9 @@
     },
     "/members/{username}": {
       "get": {
-        "tags": ["Members"],
+        "tags": [
+          "Members"
+        ],
         "summary": "Member profile",
         "description": "Latest stats per cohort, record titles held (incl. past), and badges.",
         "parameters": [
@@ -960,7 +1016,9 @@
     },
     "/admin/cohorts": {
       "post": {
-        "tags": ["Admin"],
+        "tags": [
+          "Admin"
+        ],
         "summary": "Create a cohort",
         "security": [
           {
@@ -1023,7 +1081,9 @@
     },
     "/admin/members/{username}": {
       "delete": {
-        "tags": ["Admin"],
+        "tags": [
+          "Admin"
+        ],
         "summary": "Remove a member",
         "description": "Cascade-deletes memberships, snapshots and awards, then re-evaluates affected cohorts so vacated records transfer to the runner-up.",
         "security": [
@@ -1077,7 +1137,9 @@
     },
     "/admin/sync/{slug}": {
       "post": {
-        "tags": ["Admin"],
+        "tags": [
+          "Admin"
+        ],
         "summary": "Trigger a manual sync + title evaluation",
         "security": [
           {

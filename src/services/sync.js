@@ -2,6 +2,49 @@ import { NotFoundError } from '../lib/errors.js';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** GitHub's contributionsCollection window is capped at ~one year. */
+const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+
+/**
+ * Compute the GitHub contribution window to query for a given cohort.
+ *
+ * - GLOBAL: rolling trailing 365 days ending `now` — the leaderboard stays
+ *   contestable forever, and titles awarded to the global cohort are rolling
+ *   records (see the "Global Leaderboard" section of the README).
+ * - PROGRAM (or legacy no-`kind`): `[startDate, min(endDate, now)]`, clamped to
+ *   the most recent 365 days if the requested window would exceed GitHub's cap.
+ *
+ * Pure. Accepts a mocked `now`. Callers pass in a lightweight cohort shape
+ * `{ kind, startDate, endDate }`.
+ *
+ * @param {{kind?: 'PROGRAM'|'GLOBAL', startDate: Date, endDate?: Date|null, slug?: string}} cohort
+ * @param {Date} now
+ * @param {object} [opts]
+ * @param {{warn: Function}} [opts.logger]
+ * @returns {{from: Date, to: Date, clamped?: boolean}}
+ */
+export function syncWindowForCohort(cohort, now, opts = {}) {
+  if (cohort.kind === 'GLOBAL') {
+    return { from: new Date(now.getTime() - ONE_YEAR_MS), to: new Date(now.getTime()) };
+  }
+
+  const endCandidate =
+    cohort.endDate && cohort.endDate.getTime() < now.getTime() ? cohort.endDate : now;
+  const to = new Date(endCandidate.getTime());
+  const from = new Date(cohort.startDate.getTime());
+
+  if (to.getTime() - from.getTime() > ONE_YEAR_MS) {
+    const clampedFrom = new Date(to.getTime() - ONE_YEAR_MS);
+    opts.logger?.warn?.(
+      { cohortSlug: cohort.slug, originalFrom: from, clampedFrom, to },
+      'cohort window exceeds one year — clamping to the most recent 365 days',
+    );
+    return { from: clampedFrom, to, clamped: true };
+  }
+
+  return { from, to };
+}
+
 /**
  * Map a {@link import('./github/fetchUserStats.js').UserStats} to the append-only
  * StatSnapshot columns.
@@ -32,24 +75,20 @@ function statsToSnapshot(stats, { memberId, cohortId, capturedAt }) {
   };
 }
 
-/** The effective end of a cohort's contribution window at time `now`. */
-function windowEnd(cohort, now) {
-  return cohort.endDate && cohort.endDate < now ? cohort.endDate : now;
-}
-
 /**
  * Fetch + snapshot one membership (already loaded with member, cohort, repos).
  * Also refreshes the member's cached profile fields (githubId, avatar, account age).
  * @returns {Promise<import('@prisma/client').StatSnapshot>}
  */
-async function snapshotMembership({ prisma, fetchUserStats, membership, now }) {
+async function snapshotMembership({ prisma, fetchUserStats, membership, now, logger }) {
   const { member, cohort, programRepos } = membership;
 
+  const { from, to } = syncWindowForCohort(cohort, now, { logger });
   const stats = await fetchUserStats({
     username: member.githubUsername,
     programRepos: programRepos.map((r) => ({ owner: r.owner, name: r.name })),
-    since: cohort.startDate,
-    until: windowEnd(cohort, now),
+    since: from,
+    until: to,
     today: now,
   });
 
@@ -72,7 +111,14 @@ async function snapshotMembership({ prisma, fetchUserStats, membership, now }) {
  * Sync a single member within a cohort and store a snapshot.
  * @returns {Promise<import('@prisma/client').StatSnapshot>}
  */
-export async function syncMember({ prisma, fetchUserStats, memberId, cohortId, now = new Date() }) {
+export async function syncMember({
+  prisma,
+  fetchUserStats,
+  memberId,
+  cohortId,
+  now = new Date(),
+  logger,
+}) {
   const membership = await prisma.membership.findUnique({
     where: { memberId_cohortId: { memberId, cohortId } },
     include: { member: true, cohort: true, programRepos: true },
@@ -80,7 +126,7 @@ export async function syncMember({ prisma, fetchUserStats, memberId, cohortId, n
   if (!membership) {
     throw new NotFoundError('Membership not found for this member and cohort');
   }
-  return snapshotMembership({ prisma, fetchUserStats, membership, now });
+  return snapshotMembership({ prisma, fetchUserStats, membership, now, logger });
 }
 
 /**
@@ -117,7 +163,7 @@ export async function syncCohort({
   for (let i = 0; i < cohort.memberships.length; i++) {
     const membership = { ...cohort.memberships[i], cohort };
     try {
-      await snapshotMembership({ prisma, fetchUserStats, membership, now });
+      await snapshotMembership({ prisma, fetchUserStats, membership, now, logger });
       summary.membersSynced += 1;
       summary.snapshotsCreated += 1;
     } catch (err) {
