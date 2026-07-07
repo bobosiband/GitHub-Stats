@@ -1,6 +1,9 @@
 import Fastify from 'fastify';
+import fastifySwagger from '@fastify/swagger';
+import fastifySwaggerUi from '@fastify/swagger-ui';
 
 import { config as defaultConfig } from './config.js';
+import { openapiDocument } from './docs/openapi.js';
 import prismaPlugin from './plugins/prisma.js';
 import errorHandlerPlugin from './plugins/errorHandler.js';
 import authPlugin from './plugins/auth.js';
@@ -46,6 +49,19 @@ export async function buildApp(opts = {}) {
   await app.register(errorHandlerPlugin);
   await app.register(prismaPlugin, { prisma: opts.prisma });
   await app.register(authPlugin, { adminToken: config.ADMIN_TOKEN });
+
+  // API docs: serve the OpenAPI spec (static, decoupled from route validation) and
+  // an interactive Swagger UI at /docs. Raw spec is available at GET /openapi.json
+  // and /docs/json.
+  await app.register(fastifySwagger, {
+    mode: 'static',
+    specification: { document: openapiDocument },
+  });
+  await app.register(fastifySwaggerUi, {
+    routePrefix: '/docs',
+    uiConfig: { docExpansion: 'list', deepLinking: true },
+  });
+  app.get('/openapi.json', { schema: { hide: true } }, () => app.swagger());
 
   await app.register(healthRoutes);
   await app.register(cohortRoutes, { prefix: '/cohorts' });

@@ -94,6 +94,7 @@ exits with a readable message if anything is missing or malformed.
 | `npm run db:migrate` | `prisma migrate dev`.                            |
 | `npm run db:seed`    | Seed the demo cohort.                            |
 | `npm run db:reset`   | Drop + re-create + re-seed the dev DB.           |
+| `npm run docs:gen`   | Regenerate `openapi.json` from the spec source.  |
 
 ## API
 
@@ -101,9 +102,17 @@ All responses are JSON. Errors use a consistent shape:
 `{ "error": { "code": "NOT_FOUND", "message": "…" } }`. Reads are unauthenticated;
 `/admin/*` requires `Authorization: Bearer <ADMIN_TOKEN>`.
 
+**Interactive docs:** Swagger UI is served at **`/docs`**; the raw OpenAPI 3.0 spec is at
+**`/openapi.json`** (also `/docs/json`). The spec is authored in
+[`src/docs/openapi.js`](src/docs/openapi.js) and served in static mode (decoupled from
+route validation); a committed copy lives at [`openapi.json`](openapi.json) — regenerate
+it with `npm run docs:gen`.
+
 | Method & path                        | Auth  | Description                                                    |
 | ------------------------------------ | ----- | ------------------------------------------------------------- |
 | `GET /health`                        | —     | DB status + last snapshot time.                               |
+| `GET /docs`                          | —     | Swagger UI.                                                    |
+| `GET /openapi.json`                  | —     | Raw OpenAPI 3.0 spec.                                          |
 | `GET /cohorts`                       | —     | List cohorts with member counts.                              |
 | `GET /cohorts/:slug`                 | —     | Cohort detail + member count.                                 |
 | `GET /cohorts/:slug/leaderboard`     | —     | Ranked members. `?sort=commits\|contributions\|streak\|stars`.|
