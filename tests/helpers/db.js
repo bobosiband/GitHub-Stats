@@ -63,15 +63,22 @@ export function makeMembership(memberId, cohortId, overrides = {}) {
   });
 }
 
+// Monotonic capturedAt so a snapshot created later in a test is always "newer"
+// than earlier ones for the same member (the engine picks the latest per member).
+let snapshotSeq = 0;
+const BASE_CAPTURED_AT = Date.UTC(2025, 0, 1);
+
 /**
  * Create a StatSnapshot with all required columns defaulted to 0 so a test only
- * has to specify the stats it cares about.
+ * has to specify the stats it cares about. `capturedAt` defaults to a
+ * monotonically increasing time; pass an explicit one to control ordering.
  */
 export function makeSnapshot(memberId, cohortId, overrides = {}) {
   return getPrisma().statSnapshot.create({
     data: {
       memberId,
       cohortId,
+      capturedAt: new Date(BASE_CAPTURED_AT + snapshotSeq++ * 60_000),
       totalCommits: 0,
       totalContributions: 0,
       totalPRs: 0,
