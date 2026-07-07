@@ -92,6 +92,12 @@ describe('POST /cohorts/:slug/join', () => {
     expect(res.json().error.code).toBe('FORBIDDEN');
   });
 
+  it('returns 403 when the cohort has already ended', async () => {
+    await makeCohort({ slug: 'ended', isActive: true, endDate: new Date('2020-01-01T00:00:00Z') });
+    const res = await join('ended', { githubUsername: 'latecomer', zid: 'z9000012' });
+    expect(res.statusCode).toBe(403);
+  });
+
   it('404s when joining an unknown cohort', async () => {
     const res = await join('does-not-exist', { githubUsername: 'x', zid: 'z9000011' });
     expect(res.statusCode).toBe(404);

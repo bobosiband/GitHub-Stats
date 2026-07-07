@@ -33,7 +33,6 @@ export async function buildApp(opts = {}) {
     logger:
       opts.logger ??
       (config.NODE_ENV === 'test' ? false : { level: config.LOG_LEVEL }),
-    disableRequestLogging: config.NODE_ENV === 'test',
   });
 
   // Real github service is the default; tests inject fakes to avoid the network.

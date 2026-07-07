@@ -34,7 +34,7 @@ export function makeCohort(overrides = {}) {
       name: `Cohort ${n}`,
       slug: `cohort-${n}`,
       startDate: new Date('2025-01-01T00:00:00Z'),
-      endDate: new Date('2025-12-31T00:00:00Z'),
+      endDate: null, // ongoing by default; override for ended-cohort scenarios
       isActive: true,
       ...overrides,
     },
