@@ -156,6 +156,78 @@ describe('POST /admin/sync/:slug', () => {
   });
 });
 
+describe('POST /admin/sync-all', () => {
+  it('requires a token', async () => {
+    const res = await app.inject({ method: 'POST', url: '/admin/sync-all' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('runs the sync runner across every active cohort and returns its summary', async () => {
+    const cohort = await makeCohort({ slug: 'multi' });
+    const alice = await makeMember({ githubUsername: 'alice', zid: 'z1000001' });
+    await makeMembership(alice.id, cohort.id);
+    statsByUser = { alice: { totalCommits: 42 } };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/sync-all',
+      headers: adminHeaders,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.skipped).toBe(false);
+    // The custom cohort + the always-on global cohort are both syncable.
+    const slugs = body.summaries.map((s) => s.cohortSlug).sort();
+    expect(slugs).toContain('multi');
+    expect(slugs).toContain('global');
+
+    expect(await prisma.statSnapshot.count({ where: { cohortId: cohort.id } })).toBe(1);
+  });
+
+  it('returns { skipped: true } with 200 when a run is already in progress', async () => {
+    // Build a fresh app with a slow fake fetcher so we can catch the in-progress
+    // state via a second concurrent call.
+    let release;
+    const gate = new Promise((r) => (release = r));
+
+    const slowFetch = async ({ username }) => {
+      await gate;
+      return { ...zero, login: username };
+    };
+
+    const local = await buildTestApp({ fetchUserStats: slowFetch });
+    try {
+      const cohort = await makeCohort({ slug: 'slow' });
+      const m = await makeMember({ githubUsername: 'slowuser', zid: 'z1300001' });
+      await makeMembership(m.id, cohort.id);
+
+      const first = local.inject({
+        method: 'POST',
+        url: '/admin/sync-all',
+        headers: adminHeaders,
+      });
+
+      // Small wait to let the first request enter the runner and set `running = true`.
+      await new Promise((r) => setImmediate(r));
+
+      const second = await local.inject({
+        method: 'POST',
+        url: '/admin/sync-all',
+        headers: adminHeaders,
+      });
+      expect(second.statusCode).toBe(200);
+      expect(second.json()).toEqual({ skipped: true });
+
+      release();
+      const firstRes = await first;
+      expect(firstRes.statusCode).toBe(200);
+      expect(firstRes.json().skipped).toBe(false);
+    } finally {
+      await local.close();
+    }
+  });
+});
+
 describe('DELETE /admin/members/:username', () => {
   it('cascades deletion and transfers a vacated record to the runner-up', async () => {
     const cohort = await makeCohort({ slug: 'del' });

@@ -45,15 +45,18 @@ export function createSyncRunner({ prisma, fetchUserStats, logger, delayMs = 250
 }
 
 /**
- * Schedule the sync runner with node-cron. Returns the runner and the cron task.
+ * Schedule the sync runner with node-cron. Takes an existing runner so the same
+ * in-process lock is shared between the scheduler and the admin endpoint.
+ *
  * @param {object} params
+ * @param {ReturnType<typeof createSyncRunner>} params.runner
  * @param {string} params.cronExpr
+ * @param {object} [params.logger]
  */
-export function registerSyncJob({ prisma, fetchUserStats, logger, cronExpr, delayMs }) {
+export function registerSyncJob({ runner, cronExpr, logger }) {
   if (!cron.validate(cronExpr)) {
     throw new Error(`Invalid SYNC_CRON expression: "${cronExpr}"`);
   }
-  const runner = createSyncRunner({ prisma, fetchUserStats, logger, delayMs });
   const task = cron.schedule(cronExpr, () => {
     runner.run().catch((err) => logger?.error?.({ err }, 'sync tick error'));
   });

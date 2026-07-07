@@ -123,6 +123,7 @@ it with `npm run docs:gen`.
 | `POST /admin/cohorts`                | admin | Create a cohort.                                              |
 | `DELETE /admin/members/:username`    | admin | Remove a member (cascades), then re-evaluate affected cohorts.|
 | `POST /admin/sync/:slug`             | admin | Trigger a manual sync + title evaluation; returns a summary.  |
+| `POST /admin/sync-all`               | admin | Run the sync + eval runner across every active cohort (external-cron trigger). |
 
 ### Join flow — `POST /cohorts/:slug/join`
 

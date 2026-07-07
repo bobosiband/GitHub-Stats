@@ -11,6 +11,7 @@ import securityPlugin from './plugins/security.js';
 
 import { createGithubClient } from './services/github/client.js';
 import { createGithubService } from './services/github/fetchUserStats.js';
+import { createSyncRunner } from './jobs/syncJob.js';
 
 import healthRoutes from './routes/health.js';
 import cohortRoutes from './routes/cohorts.js';
@@ -57,6 +58,15 @@ export async function buildApp(opts = {}) {
   });
   await app.register(prismaPlugin, { prisma: opts.prisma });
   await app.register(authPlugin, { adminToken: config.ADMIN_TOKEN });
+
+  // Build the sync runner once and share it between node-cron (server.js) and
+  // POST /admin/sync-all so both paths respect the same in-process lock.
+  const syncRunner = createSyncRunner({
+    prisma: app.prisma,
+    fetchUserStats,
+    logger: app.log,
+  });
+  app.decorate('syncRunner', syncRunner);
 
   // API docs: serve the OpenAPI spec (static, decoupled from route validation) and
   // an interactive Swagger UI at /docs. Raw spec is available at GET /openapi.json

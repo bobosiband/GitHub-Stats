@@ -60,4 +60,11 @@ export default async function adminRoutes(fastify) {
     const evaluation = await evaluateCohort({ prisma, cohortId: cohort.id });
     return { sync, evaluation };
   });
+
+  // POST /admin/sync-all — external cron trigger for free-tier hosts. Runs the
+  // same runner as node-cron; shares the in-process lock, so a concurrent tick
+  // safely returns `{ skipped: true }` instead of double-syncing.
+  fastify.post('/sync-all', async () => {
+    return fastify.syncRunner.run();
+  });
 }

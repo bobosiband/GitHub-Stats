@@ -15,10 +15,9 @@ await ensureGlobalCohort(app.prisma);
 let job = null;
 if (config.ENABLE_CRON) {
   job = registerSyncJob({
-    prisma: app.prisma,
-    fetchUserStats: app.fetchUserStats,
-    logger: app.log,
+    runner: app.syncRunner,
     cronExpr: config.SYNC_CRON,
+    logger: app.log,
   });
   app.log.info({ cron: config.SYNC_CRON }, 'sync job scheduled');
 } else {

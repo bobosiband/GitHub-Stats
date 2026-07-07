@@ -513,6 +513,56 @@ export const openapiDocument = {
         },
       },
     },
+    '/admin/sync-all': {
+      post: {
+        tags: ['Admin'],
+        summary: 'Run the sync + eval runner across every active cohort',
+        description:
+          'External-cron trigger for free-tier hosts. Runs the same in-process runner ' +
+          'as `node-cron` and shares its lock: if a sync is already running, returns ' +
+          '`{ "skipped": true }` with 200 instead of double-syncing.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Runner summary (or `{ skipped: true }` if already running).',
+            content: {
+              'application/json': {
+                schema: {
+                  oneOf: [
+                    {
+                      type: 'object',
+                      properties: {
+                        skipped: { type: 'boolean', enum: [false] },
+                        startedAt: { type: 'string', format: 'date-time' },
+                        finishedAt: { type: 'string', format: 'date-time' },
+                        summaries: {
+                          type: 'array',
+                          items: {
+                            type: 'object',
+                            properties: {
+                              cohortId: { type: 'string' },
+                              cohortSlug: { type: 'string' },
+                              membersSynced: { type: 'integer' },
+                              snapshotsCreated: { type: 'integer' },
+                              errors: { type: 'array', items: { type: 'object' } },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    {
+                      type: 'object',
+                      properties: { skipped: { type: 'boolean', enum: [true] } },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          401: errorResponse('Missing/invalid admin token'),
+        },
+      },
+    },
   },
 };
 
