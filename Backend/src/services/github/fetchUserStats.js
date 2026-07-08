@@ -223,6 +223,31 @@ export function createUserVerifier(client) {
 }
 
 /**
+ * Cheap current-budget probe. Returns `{ remaining, resetAt: Date|null }`
+ * — resolves to `null` on any error so the sync runner treats the probe as
+ * non-fatal and falls back to the estimated-budget guard.
+ * @param {{ query: Function }} client
+ */
+export function createRateLimitFetcher(client) {
+  return async function fetchRateLimit() {
+    try {
+      const data = await client.query(
+        // Inline import avoids a cycle with queries.js's default export.
+        (await import('./queries.js')).RATE_LIMIT,
+      );
+      const rl = data?.rateLimit;
+      if (!rl) return null;
+      return {
+        remaining: typeof rl.remaining === 'number' ? rl.remaining : null,
+        resetAt: rl.resetAt ? new Date(rl.resetAt) : null,
+      };
+    } catch {
+      return null;
+    }
+  };
+}
+
+/**
  * Convenience factory returning both service functions bound to one client.
  * @param {{ query: Function }} client
  */
@@ -230,5 +255,6 @@ export function createGithubService(client) {
   return {
     fetchUserStats: createStatsFetcher(client),
     verifyGithubUser: createUserVerifier(client),
+    fetchRateLimit: createRateLimitFetcher(client),
   };
 }

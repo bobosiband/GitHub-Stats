@@ -506,6 +506,32 @@ export const openapiDocument = {
     },
   },
   paths: {
+    '/events': {
+      get: {
+        tags: ['System'],
+        summary: 'Server-Sent Events stream',
+        description:
+          'Long-lived `text/event-stream` connection. Clients (browsers or ' +
+          "`EventSource`) receive named events as soon as data changes. Heartbeat " +
+          "comments (`:hb`) are sent every 25 s to keep intermediate proxies from " +
+          "closing idle connections.\n\n" +
+          '**Events emitted:**\n\n' +
+          '| event             | payload |\n' +
+          '| ----------------- | ------- |\n' +
+          '| `sync.completed`  | `{ cohorts: [{ slug, snapshotsCreated }], finishedAt }` |\n' +
+          '| `titles.changed`  | `{ slug, changes }` |\n' +
+          '| `cohort.updated`  | `{ slug, previousSlug?, dateChanged }` |\n' +
+          '| `cohort.deleted`  | `{ slug }` |\n\n' +
+          'OpenAPI has no first-class SSE type — this endpoint is documented for discovery. ' +
+          'The response body is a stream, not JSON.',
+        responses: {
+          200: {
+            description: 'The stream is open. Read frames as SSE.',
+            content: { 'text/event-stream': { schema: { type: 'string' } } },
+          },
+        },
+      },
+    },
     '/health': {
       get: {
         tags: ['System'],

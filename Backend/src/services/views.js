@@ -55,6 +55,30 @@ export function serializeCohort(cohort, extra = {}) {
   };
 }
 
+/**
+ * Cheap freshness fingerprint for a cohort's hot reads (leaderboard, titles).
+ * Two DB round-trips, both aggregates — never loads rows.
+ *
+ *   - Latest snapshot `capturedAt` for the cohort (aggregate `_max`).
+ *   - Membership count for the cohort.
+ *
+ * The returned ETag string changes whenever *any* member joins/leaves the
+ * cohort or a fresh snapshot lands — the two triggers for stale UI.
+ *
+ * @returns {Promise<string>}
+ */
+export async function cohortReadEtag(prisma, cohort, prefix) {
+  const [aggr, memberCount] = await Promise.all([
+    prisma.statSnapshot.aggregate({
+      where: { cohortId: cohort.id },
+      _max: { capturedAt: true },
+    }),
+    prisma.membership.count({ where: { cohortId: cohort.id } }),
+  ]);
+  const at = aggr._max.capturedAt ? aggr._max.capturedAt.getTime() : 0;
+  return `"${prefix}-${cohort.slug}-${at}-${memberCount}"`;
+}
+
 export async function getCohortBySlugOrThrow(prisma, slug) {
   const cohort = await prisma.cohort.findUnique({ where: { slug } });
   if (!cohort) throw new NotFoundError(`Cohort not found: ${slug}`);

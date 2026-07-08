@@ -74,7 +74,9 @@ exits with a readable message if anything is missing or malformed.
 | `DATABASE_URL` | yes      | —             | Postgres connection string.                                         |
 | `GITHUB_TOKEN` | yes      | —             | GitHub PAT for the sync job. Only needs **public** read scope.      |
 | `ADMIN_TOKEN`  | yes      | —             | Static bearer token guarding `/admin/*`.                            |
-| `SYNC_CRON`    | no       | `0 */3 * * *` | Cron expression for the scheduled sync (every 3 hours).             |
+| `SYNC_CRON`    | no       | `*/5 * * * *` | Cron for the scheduled sync. The budget guard below stretches this automatically if needed. |
+| `GITHUB_POINTS_BUDGET` | no | `4000`     | Safe hourly GraphQL points; runner skips ticks so estimated spend stays under this. |
+| `GITHUB_MIN_REMAINING` | no | `500`      | If GitHub reports remaining budget below this at run start, the tick is skipped. |
 | `PORT`         | no       | `3000`        | HTTP port.                                                          |
 | `HOST`         | no       | `0.0.0.0`     | Bind host.                                                          |
 | `LOG_LEVEL`    | no       | `info`        | `fatal`/`error`/`warn`/`info`/`debug`/`trace`/`silent`.             |
@@ -111,6 +113,7 @@ it with `npm run docs:gen`.
 
 | Method & path                        | Auth  | Description                                                    |
 | ------------------------------------ | ----- | ------------------------------------------------------------- |
+| `GET /events`                        | —     | Server-Sent Events stream for near-real-time updates (see below). |
 | `GET /health`                        | —     | DB status + last snapshot time.                               |
 | `GET /docs`                          | —     | Swagger UI.                                                    |
 | `GET /openapi.json`                  | —     | Raw OpenAPI 3.0 spec.                                          |
@@ -166,6 +169,36 @@ Program repos are set by organisers via the admin endpoints, not at join time:
 night-commit ratio is derived from `ProgramRepo` commit timestamps (the
 contribution calendar has no hour data), so memberships without an organiser-set
 repo simply can't win that title.
+
+## Real-time updates
+
+GitHub is polled on a **budget-guarded fast cadence** and browsers get pushed
+via SSE within milliseconds of each sync completing.
+
+- **Fast cron.** `SYNC_CRON` defaults to `*/5 * * * *`. Every tick the runner
+  (`src/jobs/syncJob.js`) counts active-cohort members and calls
+  `describeCadence(memberCount, GITHUB_POINTS_BUDGET, SYNC_CRON)` from
+  [`src/lib/budget.js`](src/lib/budget.js). If the raw cadence would blow the
+  point budget (5 GraphQL points per member × runs/hr), the runner skips
+  ticks so effective spend stays under the budget — logged once per boot as a
+  warning. A **live** guard also queries GitHub's `rateLimit { remaining }` and
+  skips the tick with `{ skipped: true, reason: 'rate_limit' }` if remaining
+  dips below `GITHUB_MIN_REMAINING`.
+- **Push, don't poll.** `GET /events` is a `text/event-stream` connection. On
+  every completed sync the runner broadcasts `sync.completed`, plus one
+  `titles.changed` per cohort whose evaluation moved any award. Cohort admin
+  routes emit `cohort.updated` / `cohort.deleted`. See the `/events` block in
+  Swagger UI for payload shapes. Broadcaster is in-process only
+  ([`src/services/events.js`](src/services/events.js)) — this deploy target is
+  one Node instance; a multi-process rollout would need a shared bus.
+- **Cheap polling fallback.** For clients where SSE is blocked (corporate
+  proxies), `GET /cohorts/:slug/leaderboard` and `GET /cohorts/:slug/titles`
+  set an `ETag` derived from the cohort's latest snapshot `capturedAt` +
+  membership count. A conditional GET with a matching `If-None-Match` returns
+  **304 Not Modified** in a few ms without touching JSON.
+- **External cron caveat.** GitHub Actions cron (`.github/workflows/sync.yml`)
+  is unreliable at 5-minute granularity and is provided as a free-tier
+  fallback only. On always-on hosts prefer the in-process node-cron.
 
 ## Titles
 

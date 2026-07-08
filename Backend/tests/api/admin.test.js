@@ -216,7 +216,9 @@ describe('POST /admin/sync-all', () => {
         headers: adminHeaders,
       });
       expect(second.statusCode).toBe(200);
-      expect(second.json()).toEqual({ skipped: true });
+      // Runner now tags the reason so operators can tell in-progress skips from
+      // budget/rate-limit skips.
+      expect(second.json()).toMatchObject({ skipped: true, reason: 'in_progress' });
 
       release();
       const firstRes = await first;

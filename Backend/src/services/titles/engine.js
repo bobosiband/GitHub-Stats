@@ -60,9 +60,13 @@ async function loadLatestSnapshots(prisma, cohortId) {
   return latest;
 }
 
-/** Evaluate a single RECORD rule inside a transaction. */
+/**
+ * Evaluate a single RECORD rule inside a transaction.
+ * @returns {Promise<number>} number of TitleAward rows written or revoked
+ */
 async function evaluateRecord(tx, { title, rule, cohortId, latest, now }) {
   const higher = rule.higherIsBetter !== false;
+  let changes = 0;
 
   const candidates = [];
   for (const { snapshot, member } of latest.values()) {
@@ -77,9 +81,11 @@ async function evaluateRecord(tx, { title, rule, cohortId, latest, now }) {
   });
 
   if (candidates.length === 0) {
-    if (current)
+    if (current) {
       await tx.titleAward.update({ where: { id: current.id }, data: { revokedAt: now } });
-    return;
+      changes += 1;
+    }
+    return changes;
   }
 
   const bestMetric = candidates.reduce(
@@ -104,10 +110,12 @@ async function evaluateRecord(tx, { title, rule, cohortId, latest, now }) {
     await tx.titleAward.create({
       data: { titleId: title.id, memberId: winner.memberId, cohortId, value, awardedAt: now },
     });
+    changes += 1;
   } else if (current.memberId === winner.memberId) {
     // Holder unchanged — refresh the stored value only if it actually changed.
     if (stableStringify(current.value) !== stableStringify(value)) {
       await tx.titleAward.update({ where: { id: current.id }, data: { value } });
+      changes += 1;
     }
   } else {
     // Strictly-better challenger (or the incumbent became ineligible): transfer.
@@ -115,11 +123,17 @@ async function evaluateRecord(tx, { title, rule, cohortId, latest, now }) {
     await tx.titleAward.create({
       data: { titleId: title.id, memberId: winner.memberId, cohortId, value, awardedAt: now },
     });
+    changes += 2;
   }
+  return changes;
 }
 
-/** Evaluate a single BADGE rule inside a transaction. Badges are additive & permanent. */
+/**
+ * Evaluate a single BADGE rule inside a transaction. Badges are additive & permanent.
+ * @returns {Promise<number>} number of newly-created badge awards
+ */
 async function evaluateBadge(tx, { title, rule, cohortId, latest, now }) {
+  let changes = 0;
   for (const { snapshot, member } of latest.values()) {
     if (!rule.qualifies(snapshot, member)) continue;
     const existing = await tx.titleAward.findFirst({
@@ -132,7 +146,9 @@ async function evaluateBadge(tx, { title, rule, cohortId, latest, now }) {
     await tx.titleAward.create({
       data: { titleId: title.id, memberId: member.id, cohortId, value, awardedAt: now },
     });
+    changes += 1;
   }
+  return changes;
 }
 
 /**
@@ -156,19 +172,25 @@ export async function evaluateCohort({ prisma, cohortId, now = new Date() }) {
   // under managed-Postgres round-trip latency (14 rules × N members of serial
   // findFirst/update calls) — P2028 "transaction not found" is what surfaces.
   // Give it real headroom; evaluation is idempotent, so worst-case retry is cheap.
+  let awardsChanged = 0;
   await prisma.$transaction(
     async (tx) => {
       for (const rule of RECORD_RULES) {
         const title = titleByKey.get(rule.key);
-        if (title) await evaluateRecord(tx, { title, rule, cohortId, latest, now });
+        if (title) awardsChanged += await evaluateRecord(tx, { title, rule, cohortId, latest, now });
       }
       for (const rule of BADGE_RULES) {
         const title = titleByKey.get(rule.key);
-        if (title) await evaluateBadge(tx, { title, rule, cohortId, latest, now });
+        if (title) awardsChanged += await evaluateBadge(tx, { title, rule, cohortId, latest, now });
       }
     },
     { timeout: 60_000, maxWait: 10_000 },
   );
 
-  return { records: RECORD_RULES.length, badges: BADGE_RULES.length, members: latest.size };
+  return {
+    records: RECORD_RULES.length,
+    badges: BADGE_RULES.length,
+    members: latest.size,
+    awardsChanged,
+  };
 }

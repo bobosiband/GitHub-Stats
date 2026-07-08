@@ -712,6 +712,84 @@
           }
         }
       },
+      "UpdateCohortRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Patch a cohort. At least one field must be present. The `global` cohort accepts only `name`; any other field 403s. `kind` is not editable.",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UpdateCohortResult": {
+        "type": "object",
+        "properties": {
+          "cohort": {
+            "$ref": "#/components/schemas/Cohort"
+          },
+          "resyncTriggered": {
+            "type": "boolean",
+            "description": "True when startDate/endDate changed — the sync + title evaluation for this cohort is running in the background so existing snapshots don't reflect a stale window."
+          }
+        }
+      },
+      "DeleteCohortResult": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "cohort": {
+            "type": "object",
+            "properties": {
+              "slug": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "counts": {
+            "type": "object",
+            "properties": {
+              "memberships": {
+                "type": "integer"
+              },
+              "snapshots": {
+                "type": "integer"
+              },
+              "awards": {
+                "type": "integer"
+              },
+              "titles": {
+                "type": "integer",
+                "description": "Always 0 — Title definitions are global, not cohort-scoped."
+              }
+            }
+          }
+        }
+      },
       "CreateCohortRequest": {
         "type": "object",
         "required": [
@@ -808,6 +886,27 @@
     }
   },
   "paths": {
+    "/events": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Server-Sent Events stream",
+        "description": "Long-lived `text/event-stream` connection. Clients (browsers or `EventSource`) receive named events as soon as data changes. Heartbeat comments (`:hb`) are sent every 25 s to keep intermediate proxies from closing idle connections.\n\n**Events emitted:**\n\n| event             | payload |\n| ----------------- | ------- |\n| `sync.completed`  | `{ cohorts: [{ slug, snapshotsCreated }], finishedAt }` |\n| `titles.changed`  | `{ slug, changes }` |\n| `cohort.updated`  | `{ slug, previousSlug?, dateChanged }` |\n| `cohort.deleted`  | `{ slug }` |\n\nOpenAPI has no first-class SSE type — this endpoint is documented for discovery. The response body is a stream, not JSON.",
+        "responses": {
+          "200": {
+            "description": "The stream is open. Read frames as SSE.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -1377,6 +1476,170 @@
           },
           "404": {
             "description": "Unknown member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/cohorts/{slug}": {
+      "patch": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Update a cohort",
+        "description": "Partial update — at least one editable field must be supplied. Date changes trigger a background re-sync + title re-evaluation for that cohort and set `resyncTriggered: true` on the response. The global cohort is protected: only `name` may be changed.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cohort slug (kebab-case).",
+            "example": "devsoc-2025"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCohortRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated cohort",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateCohortResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty body, invalid dates, or unknown field",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing/invalid admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Editing a protected field on the global cohort",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown slug",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "New slug is already taken",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Delete a cohort",
+        "description": "Cascade-deletes memberships, snapshots, and title awards for this cohort. Members themselves survive (they stay on `global` and any other cohorts). The global cohort cannot be deleted.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cohort slug (kebab-case).",
+            "example": "devsoc-2025"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Delete summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteCohortResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing/invalid admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Cannot delete the global cohort",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown slug",
             "content": {
               "application/json": {
                 "schema": {

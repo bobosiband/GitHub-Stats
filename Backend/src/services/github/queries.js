@@ -4,6 +4,19 @@
  */
 
 /**
+ * Cheap probe (~1 point) for the current GraphQL budget. Used by the sync
+ * runner to skip a tick if the remaining budget dips below GITHUB_MIN_REMAINING.
+ */
+export const RATE_LIMIT = /* GraphQL */ `
+  query RateLimit {
+    rateLimit {
+      remaining
+      resetAt
+    }
+  }
+`;
+
+/**
  * Minimal profile lookup used to verify a user exists at join time.
  * A non-existent login makes GitHub return a NOT_FOUND error.
  */

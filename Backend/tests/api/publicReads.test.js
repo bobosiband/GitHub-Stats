@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll, beforeAll } from 'vitest';
 import { buildTestApp } from '../helpers/app.js';
 import {
+  getPrisma,
   resetDb,
   disconnectDb,
   makeCohort,
@@ -10,6 +11,7 @@ import {
 } from '../helpers/db.js';
 import { evaluateCohort } from '../../src/services/titles/engine.js';
 
+const prisma = getPrisma();
 let app;
 
 beforeAll(async () => {
@@ -103,6 +105,51 @@ describe('GET /cohorts/:slug/leaderboard', () => {
     expect(res.json().error.code).toBe('VALIDATION_ERROR');
   });
 
+  it('sets an ETag and answers 304 for a matching If-None-Match', async () => {
+    await seedLeaderboard();
+    const first = await app.inject({ method: 'GET', url: '/cohorts/lb/leaderboard' });
+    expect(first.statusCode).toBe(200);
+    const etag = first.headers.etag;
+    expect(etag).toBeTruthy();
+
+    const conditional = await app.inject({
+      method: 'GET',
+      url: '/cohorts/lb/leaderboard',
+      headers: { 'if-none-match': etag },
+    });
+    expect(conditional.statusCode).toBe(304);
+    expect(conditional.body).toBe('');
+    // The 304 must still carry the ETag so the client keeps caching correctly.
+    expect(conditional.headers.etag).toBe(etag);
+  });
+
+  it('changes ETag (and returns 200) when a newer snapshot lands', async () => {
+    const cohort = await seedLeaderboard();
+    const first = await app.inject({ method: 'GET', url: '/cohorts/lb/leaderboard' });
+    const etag = first.headers.etag;
+
+    // A newer snapshot bumps `_max.capturedAt` → ETag changes.
+    const alice = await prisma.member.findUnique({ where: { githubUsername: 'alice' } });
+    await makeSnapshot(alice.id, cohort.id, { totalCommits: 200 });
+
+    const second = await app.inject({
+      method: 'GET',
+      url: '/cohorts/lb/leaderboard',
+      headers: { 'if-none-match': etag },
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.headers.etag).not.toBe(etag);
+  });
+
+  it('uses distinct ETags per sort (different sorts are different resources)', async () => {
+    await seedLeaderboard();
+    const commits = await app.inject({ method: 'GET', url: '/cohorts/lb/leaderboard?sort=commits' });
+    const stars = await app.inject({ method: 'GET', url: '/cohorts/lb/leaderboard?sort=stars' });
+    expect(commits.headers.etag).toBeTruthy();
+    expect(stars.headers.etag).toBeTruthy();
+    expect(commits.headers.etag).not.toBe(stars.headers.etag);
+  });
+
   it('ranks by only the latest snapshot when a member has several', async () => {
     // With DISTINCT ON, only each member's newest capturedAt should feed the
     // ranking — historical snapshots must not sway the order.
@@ -129,6 +176,26 @@ describe('GET /cohorts/:slug/leaderboard', () => {
 });
 
 describe('GET /cohorts/:slug/titles', () => {
+  it('sets an ETag and answers 304 for a matching If-None-Match', async () => {
+    const cohort = await makeCohort({ slug: 'etag-titles' });
+    const a = await makeMember({ githubUsername: 'ada2', zid: 'z2100010' });
+    await makeMembership(a.id, cohort.id);
+    await makeSnapshot(a.id, cohort.id, { totalCommits: 100 });
+
+    const first = await app.inject({ method: 'GET', url: '/cohorts/etag-titles/titles' });
+    expect(first.statusCode).toBe(200);
+    const etag = first.headers.etag;
+    expect(etag).toBeTruthy();
+
+    const conditional = await app.inject({
+      method: 'GET',
+      url: '/cohorts/etag-titles/titles',
+      headers: { 'if-none-match': etag },
+    });
+    expect(conditional.statusCode).toBe(304);
+    expect(conditional.headers.etag).toBe(etag);
+  });
+
   it('returns records with holders and badges with earners', async () => {
     const cohort = await makeCohort({ slug: 'titles-x' });
     const a = await makeMember({ githubUsername: 'ada', zid: 'z2000001' });

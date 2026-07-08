@@ -23,7 +23,14 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   GITHUB_TOKEN: z.string().min(1, 'GITHUB_TOKEN is required'),
   ADMIN_TOKEN: z.string().min(1, 'ADMIN_TOKEN is required'),
-  SYNC_CRON: z.string().default('0 */3 * * *'),
+  // Default is every 5 minutes — the budget guard in src/lib/budget.js will
+  // automatically stretch this if the current member count would blow the
+  // GraphQL point budget below.
+  SYNC_CRON: z.string().default('*/5 * * * *'),
+  GITHUB_POINTS_BUDGET: z.coerce.number().int().positive().default(4000),
+  // If GitHub's own rate-limit `remaining` drops below this at run start,
+  // the runner skips the tick entirely — hard floor under the estimate.
+  GITHUB_MIN_REMAINING: z.coerce.number().int().nonnegative().default(500),
   PORT: z.coerce.number().int().positive().default(3000),
   HOST: z.string().default('0.0.0.0'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),

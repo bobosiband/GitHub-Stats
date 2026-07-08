@@ -20,6 +20,7 @@ import titleRoutes from './routes/titles.js';
 import memberRoutes from './routes/members.js';
 import historyRoutes from './routes/history.js';
 import adminRoutes from './routes/admin.js';
+import eventRoutes from './routes/events.js';
 
 /**
  * Build a configured Fastify app WITHOUT calling `.listen()`. This is the unit
@@ -44,6 +45,7 @@ export async function buildApp(opts = {}) {
   const github = createGithubService(createGithubClient({ token: config.GITHUB_TOKEN }));
   const fetchUserStats = opts.fetchUserStats ?? github.fetchUserStats;
   const verifyGithubUser = opts.verifyGithubUser ?? github.verifyGithubUser;
+  const fetchRateLimit = opts.fetchRateLimit ?? github.fetchRateLimit;
 
   app.decorate('config', config);
   app.decorate('fetchUserStats', fetchUserStats);
@@ -65,7 +67,11 @@ export async function buildApp(opts = {}) {
   const syncRunner = createSyncRunner({
     prisma: app.prisma,
     fetchUserStats,
+    fetchRateLimit,
     logger: app.log,
+    cronExpr: config.SYNC_CRON,
+    pointsBudget: config.GITHUB_POINTS_BUDGET,
+    minRemaining: config.GITHUB_MIN_REMAINING,
   });
   app.decorate('syncRunner', syncRunner);
 
@@ -89,6 +95,7 @@ export async function buildApp(opts = {}) {
   await app.register(memberRoutes, { prefix: '/members' });
   await app.register(historyRoutes, { prefix: '/members' });
   await app.register(adminRoutes, { prefix: '/admin' });
+  await app.register(eventRoutes);
 
   return app;
 }
