@@ -102,6 +102,30 @@ describe('GET /cohorts/:slug/leaderboard', () => {
     expect(res.statusCode).toBe(400);
     expect(res.json().error.code).toBe('VALIDATION_ERROR');
   });
+
+  it('ranks by only the latest snapshot when a member has several', async () => {
+    // With DISTINCT ON, only each member's newest capturedAt should feed the
+    // ranking — historical snapshots must not sway the order.
+    const cohort = await makeCohort({ slug: 'lb-multi' });
+    const alice = await makeMember({ githubUsername: 'alice', zid: 'z1500001' });
+    const bob = await makeMember({ githubUsername: 'bob', zid: 'z1500002' });
+    await makeMembership(alice.id, cohort.id);
+    await makeMembership(bob.id, cohort.id);
+    // Alice: three snapshots, the latest is 500 (she now leads).
+    await makeSnapshot(alice.id, cohort.id, { totalCommits: 10 });
+    await makeSnapshot(alice.id, cohort.id, { totalCommits: 200 });
+    await makeSnapshot(alice.id, cohort.id, { totalCommits: 500 });
+    // Bob: two snapshots, the latest is 300 (older was higher — must be ignored).
+    await makeSnapshot(bob.id, cohort.id, { totalCommits: 999 });
+    await makeSnapshot(bob.id, cohort.id, { totalCommits: 300 });
+
+    const res = await app.inject({ method: 'GET', url: '/cohorts/lb-multi/leaderboard' });
+    expect(res.statusCode).toBe(200);
+    const ranking = res.json().ranking;
+    expect(ranking.map((r) => r.member.githubUsername)).toEqual(['alice', 'bob']);
+    expect(ranking[0].stats.totalCommits).toBe(500);
+    expect(ranking[1].stats.totalCommits).toBe(300);
+  });
 });
 
 describe('GET /cohorts/:slug/titles', () => {
@@ -146,6 +170,8 @@ describe('GET /members/:username', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.member.githubUsername).toBe('veteran');
+    // zid is PII — must never appear on the unauthenticated profile endpoint.
+    expect(body.member).not.toHaveProperty('zid');
     expect(body.cohorts.map((c) => c.cohort.slug).sort()).toEqual(['current', 'past']);
 
     const machine = body.titles.find((t) => t.key === 'most_commits');

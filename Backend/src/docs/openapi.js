@@ -252,9 +252,11 @@ export const openapiDocument = {
         properties: {
           member: {
             type: 'object',
+            description:
+              'Public member profile. `zid` is deliberately NOT included — it is PII and this ' +
+              'endpoint is unauthenticated.',
             properties: {
               githubUsername: { type: 'string' },
-              zid: { type: 'string' },
               displayName: { type: 'string', nullable: true },
               avatarUrl: { type: 'string', nullable: true },
               githubId: { type: 'integer', nullable: true },

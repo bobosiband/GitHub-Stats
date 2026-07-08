@@ -67,14 +67,35 @@ export async function getMemberByUsernameOrThrow(prisma, githubUsername) {
   return member;
 }
 
-/** Build a `Map<memberId, latestSnapshot>` for a cohort. */
+/**
+ * Build a `Map<memberId, latestSnapshot>` for a cohort.
+ *
+ * Uses Postgres `DISTINCT ON` so the DB returns exactly one row per member
+ * (the latest by `capturedAt`) instead of shipping every historical snapshot
+ * across the wire and reducing in JS. `calendar` is excluded from the select
+ * list — nothing downstream of the leaderboard reads it (`serializeSnapshot`
+ * drops it), and it's the biggest JSONB column on the table by a wide margin.
+ * `topLanguages` stays because the API does return it.
+ *
+ * Rows come back with quoted-camelCase column names as-is (Prisma raw doesn't
+ * remap them), JSONB parsed, timestamps as `Date` — so no conversion needed
+ * before passing to `serializeSnapshot`.
+ */
 async function latestSnapshotByMember(prisma, cohortId) {
-  const snaps = await prisma.statSnapshot.findMany({
-    where: { cohortId },
-    orderBy: { capturedAt: 'desc' },
-  });
+  const rows = await prisma.$queryRaw`
+    SELECT DISTINCT ON ("memberId")
+      "memberId", "cohortId", "capturedAt",
+      "totalCommits", "totalContributions", "totalPRs", "mergedPRs",
+      "reviewsGiven", "issuesOpened", "followers", "totalStars",
+      "repoCount", "contributedRepoCount", "languageCount", "topLanguages",
+      "longestStreak", "currentStreak", "maxCommitsInOneDay",
+      "weekendCommitRatio", "nightCommitRatio"
+    FROM "StatSnapshot"
+    WHERE "cohortId" = ${cohortId}
+    ORDER BY "memberId", "capturedAt" DESC
+  `;
   const latest = new Map();
-  for (const s of snaps) if (!latest.has(s.memberId)) latest.set(s.memberId, s);
+  for (const s of rows) latest.set(s.memberId, s);
   return latest;
 }
 
@@ -156,9 +177,11 @@ export async function buildMemberProfile(prisma, member) {
   const serialized = awards.map(serializeAward);
 
   return {
+    // NB: `zid` is deliberately omitted here — it is PII and the profile route
+    // is unauthenticated. The DB still stores it and admin/identity paths use
+    // it internally; it just never crosses the wire.
     member: {
       githubUsername: member.githubUsername,
-      zid: member.zid,
       displayName: member.displayName,
       avatarUrl: member.avatarUrl,
       githubId: member.githubId,

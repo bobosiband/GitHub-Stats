@@ -46,10 +46,14 @@ describe('POST /cohorts/:slug/join', () => {
     const body = res.json();
     expect(body.member).toMatchObject({
       githubUsername: 'newbie',
-      zid: 'z9000001',
       displayName: 'The newbie',
       avatarUrl: 'https://avatar/newbie',
     });
+    // zid must NOT leak on the public profile response (see views.js).
+    expect(body.member).not.toHaveProperty('zid');
+    // The DB row still carries it.
+    const stored = await prisma.member.findUnique({ where: { githubUsername: 'newbie' } });
+    expect(stored.zid).toBe('z9000001');
     // Program cohort + auto-added global cohort.
     expect(body.cohorts).toHaveLength(2);
     expect(body.cohorts.map((c) => c.cohort.slug).sort()).toEqual(['global', 'open']);

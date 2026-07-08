@@ -114,6 +114,10 @@ model StatSnapshot {
 
   @@index([memberId, cohortId, capturedAt])
   @@index([cohortId, capturedAt])
+  // Serves the leaderboard's DISTINCT ON ("memberId") ... ORDER BY "memberId",
+  // "capturedAt" DESC in `views.js` — the sort direction matters so the DB can
+  // read the group's first row without an extra sort step.
+  @@index([cohortId, memberId, capturedAt(sort: Desc)])
 }
 
 model Title {
