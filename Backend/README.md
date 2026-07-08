@@ -122,13 +122,17 @@ it with `npm run docs:gen`.
 | `POST /cohorts/:slug/join`           | —     | **Public** self-serve join (see below).                       |
 | `POST /admin/cohorts`                | admin | Create a cohort.                                              |
 | `DELETE /admin/members/:username`    | admin | Remove a member (cascades), then re-evaluate affected cohorts.|
+| `PUT /admin/members/:username/program-repo` | admin | Register/replace an organiser-managed program repo for the member's membership in a cohort. |
+| `DELETE /admin/members/:username/program-repo?cohortSlug=…` | admin | Remove the organiser-registered program repo. |
 | `POST /admin/sync/:slug`             | admin | Trigger a manual sync + title evaluation; returns a summary.  |
 | `POST /admin/sync-all`               | admin | Run the sync + eval runner across every active cohort (external-cron trigger). |
 
 ### Join flow — `POST /cohorts/:slug/join`
 
-Body: `{ githubUsername, zid, displayName?, programRepo? }` where `programRepo` is
-`"owner/name"` or `{ owner, name }`.
+Body: strictly `{ githubUsername, zid }`. **Any other field** — including the
+previously-supported `displayName` and `programRepo` — is rejected with **400**
+`VALIDATION_ERROR` and a message like
+`unexpected field "programRepo" — join only needs githubUsername and zid`.
 
 - `zid` must match `z` + 7 digits → otherwise **400**.
 - Unknown cohort → **404**; inactive/ended cohort → **403**.
@@ -137,7 +141,27 @@ Body: `{ githubUsername, zid, displayName?, programRepo? }` where `programRepo` 
   - the **same** `(zid, username)` returning to join a new cohort → the existing `Member`
     row is reused, a new `Membership` is added, and old titles are preserved.
 - New members are verified against the GitHub API; a non-existent user → **422**.
+- `displayName` and `avatarUrl` auto-populate from the verified GitHub profile
+  (falling back to the login when the profile has no `name`), and they refresh
+  from the profile on every sync so GitHub-side renames propagate.
+- Program repos are **organiser-managed** — see
+  `PUT /admin/members/:username/program-repo` below.
 - Success → **201** with the member profile.
+
+### Program repos (organiser-managed)
+
+Program repos are set by organisers via the admin endpoints, not at join time:
+
+- `PUT /admin/members/:username/program-repo` with body `{ cohortSlug, repo }`.
+  `repo` is `"owner/name"` or `{ owner, name }`. Replace-on-exists — one program
+  repo per (member, cohort) membership; any prior entries for that membership
+  are removed.
+- `DELETE /admin/members/:username/program-repo?cohortSlug=…` removes it.
+
+**Night Owl only activates in cohorts with a registered program repo** — the
+night-commit ratio is derived from `ProgramRepo` commit timestamps (the
+contribution calendar has no hour data), so memberships without an organiser-set
+repo simply can't win that title.
 
 ## Titles
 
@@ -176,8 +200,9 @@ awarding it. It is idempotent — evaluating twice changes nothing.
   GitHub settings; stars/languages/program-repo stats require the repos to be **public**.
   **Program guideline: make your training project repo public.**
 - The night-owl ratio comes from registered `ProgramRepo` commit timestamps (the
-  contribution calendar has no hour data). Members without a registered repo simply
-  can't win Night Owl.
+  contribution calendar has no hour data). Program repos are organiser-set via
+  `PUT /admin/members/:username/program-repo`, so memberships without an
+  organiser-registered repo simply can't win Night Owl.
 - Sync costs ~4–5 GraphQL points per member; a 50-person cohort is trivial against the
   5,000/hr budget. The client ([`src/services/github/client.js`](src/services/github/client.js))
   retries transient errors and honours secondary-rate-limit `retry-after` headers, and

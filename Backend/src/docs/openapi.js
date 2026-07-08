@@ -295,6 +295,13 @@ export const openapiDocument = {
       JoinRequest: {
         type: 'object',
         required: ['githubUsername', 'zid'],
+        additionalProperties: false,
+        description:
+          'Strict: only `githubUsername` and `zid` are accepted. Any other field ' +
+          '(including `displayName` and `programRepo`, which were removed) is rejected ' +
+          'with a VALIDATION_ERROR. `displayName`/`avatarUrl` auto-populate from the ' +
+          "verified GitHub profile; program repos are now organiser-managed via " +
+          '`PUT /admin/members/{username}/program-repo`.',
         properties: {
           githubUsername: { type: 'string', example: 'octocat', description: 'GitHub login.' },
           zid: {
@@ -303,8 +310,14 @@ export const openapiDocument = {
             example: 'z1234567',
             description: '"z" followed by exactly 7 digits.',
           },
-          displayName: { type: 'string', nullable: true },
-          programRepo: {
+        },
+      },
+      ProgramRepoRequest: {
+        type: 'object',
+        required: ['cohortSlug', 'repo'],
+        properties: {
+          cohortSlug: { type: 'string', example: 'devsoc-2025' },
+          repo: {
             oneOf: [
               { type: 'string', example: 'octocat/project', description: '"owner/name".' },
               {
@@ -313,7 +326,29 @@ export const openapiDocument = {
                 properties: { owner: { type: 'string' }, name: { type: 'string' } },
               },
             ],
-            description: 'Optional registered project repo.',
+          },
+        },
+      },
+      ProgramRepoResult: {
+        type: 'object',
+        properties: {
+          programRepo: {
+            type: 'object',
+            properties: {
+              cohortSlug: { type: 'string' },
+              username: { type: 'string' },
+              owner: { type: 'string' },
+              name: { type: 'string' },
+            },
+          },
+        },
+      },
+      ProgramRepoDeleteResult: {
+        type: 'object',
+        properties: {
+          deleted: {
+            type: 'integer',
+            description: 'Number of ProgramRepo rows removed (0 if none registered).',
           },
         },
       },
@@ -438,14 +473,19 @@ export const openapiDocument = {
         tags: ['Cohorts'],
         summary: 'Public self-serve join',
         description:
-          'Verifies the GitHub user exists and adds them to the cohort. Reuses an existing ' +
+          'Verifies the GitHub user exists and adds them to the cohort. The body is strict — ' +
+          'only `{ githubUsername, zid }` is accepted; any unknown field (including the ' +
+          'removed `displayName` and `programRepo`) is rejected with a friendly ' +
+          '`VALIDATION_ERROR`. `displayName`/`avatarUrl` are auto-populated from the verified ' +
+          'GitHub profile (falling back to the login when the profile has no name). Program ' +
+          'repos are now organiser-managed — see the admin endpoints. Reuses an existing ' +
           'member on an exact (zid, githubUsername) match; never silently re-links a zid to a ' +
           'different username.',
         parameters: [slugParam],
         requestBody: jsonBody('JoinRequest'),
         responses: {
           201: jsonResponse('Member profile', 'MemberProfile'),
-          400: errorResponse('Invalid body (e.g. bad zid format)'),
+          400: errorResponse('Invalid body (bad zid format or an unexpected field)'),
           403: errorResponse('Cohort is inactive or has ended'),
           404: errorResponse('Unknown slug'),
           409: errorResponse('Duplicate zid/username belonging to a different identity'),
@@ -500,6 +540,48 @@ export const openapiDocument = {
           200: jsonResponse('Deletion summary', 'DeleteMemberResult'),
           401: errorResponse('Missing/invalid admin token'),
           404: errorResponse('Unknown member'),
+        },
+      },
+    },
+    '/admin/members/{username}/program-repo': {
+      put: {
+        tags: ['Admin'],
+        summary: 'Register a program repo for a membership',
+        description:
+          'Organiser-managed: attaches a `ProgramRepo` to the member\'s membership in the ' +
+          'given cohort. Replace-on-exists — one program repo per membership; any prior ' +
+          'entries for that membership are removed. Night Owl and other program-repo-derived ' +
+          'stats (e.g. the night-commit ratio) only activate for memberships with a ' +
+          'registered repo, so cohorts without organiser-set repos simply cannot win Night Owl.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'username', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: jsonBody('ProgramRepoRequest'),
+        responses: {
+          200: jsonResponse('Registered program repo', 'ProgramRepoResult'),
+          400: errorResponse('Invalid body (e.g. bad `repo` format)'),
+          401: errorResponse('Missing/invalid admin token'),
+          404: errorResponse('Unknown member, cohort, or membership'),
+        },
+      },
+      delete: {
+        tags: ['Admin'],
+        summary: 'Remove a program repo from a membership',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'username', in: 'path', required: true, schema: { type: 'string' } },
+          {
+            name: 'cohortSlug',
+            in: 'query',
+            required: true,
+            schema: { type: 'string' },
+            description: 'The cohort slug whose membership the program repo belongs to.',
+          },
+        ],
+        responses: {
+          200: jsonResponse('Delete summary', 'ProgramRepoDeleteResult'),
+          400: errorResponse('Missing `cohortSlug` query parameter'),
+          401: errorResponse('Missing/invalid admin token'),
+          404: errorResponse('Unknown member, cohort, or membership'),
         },
       },
     },
