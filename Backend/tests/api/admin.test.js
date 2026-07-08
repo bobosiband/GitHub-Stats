@@ -308,3 +308,204 @@ describe('DELETE /admin/members/:username', () => {
     ).toBe('gb');
   });
 });
+
+describe('PUT /admin/members/:username/program-repo', () => {
+  it('registers a program repo for the member+cohort membership', async () => {
+    const cohort = await makeCohort({ slug: 'pr-cohort' });
+    const m = await makeMember({ githubUsername: 'ada', zid: 'z2000001' });
+    await makeMembership(m.id, cohort.id);
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/admin/members/ada/program-repo',
+      headers: adminHeaders,
+      payload: { cohortSlug: 'pr-cohort', repo: 'ada/analytical-engine' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      programRepo: {
+        cohortSlug: 'pr-cohort',
+        username: 'ada',
+        owner: 'ada',
+        name: 'analytical-engine',
+      },
+    });
+
+    const rows = await prisma.programRepo.findMany();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ owner: 'ada', name: 'analytical-engine' });
+  });
+
+  it('accepts the { owner, name } object shape', async () => {
+    const cohort = await makeCohort({ slug: 'pr-obj' });
+    const m = await makeMember({ githubUsername: 'grace', zid: 'z2000002' });
+    await makeMembership(m.id, cohort.id);
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/admin/members/grace/program-repo',
+      headers: adminHeaders,
+      payload: { cohortSlug: 'pr-obj', repo: { owner: 'grace', name: 'compiler' } },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().programRepo).toMatchObject({ owner: 'grace', name: 'compiler' });
+  });
+
+  it('replaces an existing program repo on re-submission (one per membership)', async () => {
+    const cohort = await makeCohort({ slug: 'pr-replace' });
+    const m = await makeMember({ githubUsername: 'linus', zid: 'z2000003' });
+    const membership = await makeMembership(m.id, cohort.id);
+    // Seed two rows to prove replace-on-exists also cleans historical duplicates.
+    await prisma.programRepo.createMany({
+      data: [
+        { membershipId: membership.id, owner: 'linus', name: 'old-one' },
+        { membershipId: membership.id, owner: 'linus', name: 'old-two' },
+      ],
+    });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/admin/members/linus/program-repo',
+      headers: adminHeaders,
+      payload: { cohortSlug: 'pr-replace', repo: 'linus/kernel' },
+    });
+    expect(res.statusCode).toBe(200);
+    const rows = await prisma.programRepo.findMany({ where: { membershipId: membership.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ owner: 'linus', name: 'kernel' });
+  });
+
+  it('rejects an invalid repo format with 400', async () => {
+    const cohort = await makeCohort({ slug: 'pr-bad' });
+    const m = await makeMember({ githubUsername: 'alan', zid: 'z2000004' });
+    await makeMembership(m.id, cohort.id);
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/admin/members/alan/program-repo',
+      headers: adminHeaders,
+      payload: { cohortSlug: 'pr-bad', repo: 'not-a-valid-repo' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('404s for an unknown member', async () => {
+    await makeCohort({ slug: 'pr-cohort' });
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/admin/members/ghost/program-repo',
+      headers: adminHeaders,
+      payload: { cohortSlug: 'pr-cohort', repo: 'ghost/repo' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('404s for an unknown cohort', async () => {
+    const m = await makeMember({ githubUsername: 'ada', zid: 'z2000005' });
+    // No cohort with this slug.
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/admin/members/${m.githubUsername}/program-repo`,
+      headers: adminHeaders,
+      payload: { cohortSlug: 'no-such-cohort', repo: 'ada/x' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('404s when the member is not a member of the cohort', async () => {
+    await makeCohort({ slug: 'has-no-ada' });
+    const m = await makeMember({ githubUsername: 'ada', zid: 'z2000006' });
+    // Deliberately no makeMembership.
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/admin/members/${m.githubUsername}/program-repo`,
+      headers: adminHeaders,
+      payload: { cohortSlug: 'has-no-ada', repo: 'ada/x' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('requires a token', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/admin/members/ada/program-repo',
+      payload: { cohortSlug: 'anything', repo: 'ada/x' },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+});
+
+describe('DELETE /admin/members/:username/program-repo', () => {
+  it('removes the program repo for that membership', async () => {
+    const cohort = await makeCohort({ slug: 'del-pr' });
+    const m = await makeMember({ githubUsername: 'ada', zid: 'z2100001' });
+    const membership = await makeMembership(m.id, cohort.id);
+    await prisma.programRepo.create({
+      data: { membershipId: membership.id, owner: 'ada', name: 'engine' },
+    });
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/admin/members/ada/program-repo?cohortSlug=del-pr',
+      headers: adminHeaders,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ deleted: 1 });
+    expect(await prisma.programRepo.count()).toBe(0);
+  });
+
+  it('returns { deleted: 0 } when no program repo is registered', async () => {
+    const cohort = await makeCohort({ slug: 'empty-pr' });
+    const m = await makeMember({ githubUsername: 'grace', zid: 'z2100002' });
+    await makeMembership(m.id, cohort.id);
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/admin/members/grace/program-repo?cohortSlug=empty-pr',
+      headers: adminHeaders,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ deleted: 0 });
+  });
+
+  it('404s for an unknown member', async () => {
+    await makeCohort({ slug: 'del-pr' });
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/admin/members/ghost/program-repo?cohortSlug=del-pr',
+      headers: adminHeaders,
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('404s when the member is not a member of the cohort', async () => {
+    await makeCohort({ slug: 'del-pr' });
+    const m = await makeMember({ githubUsername: 'ada', zid: 'z2100003' });
+    // No membership.
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/admin/members/${m.githubUsername}/program-repo?cohortSlug=del-pr`,
+      headers: adminHeaders,
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('rejects a missing cohortSlug with 400', async () => {
+    const m = await makeMember({ githubUsername: 'ada', zid: 'z2100004' });
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/admin/members/${m.githubUsername}/program-repo`,
+      headers: adminHeaders,
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('requires a token', async () => {
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/admin/members/ada/program-repo?cohortSlug=whatever',
+    });
+    expect(res.statusCode).toBe(401);
+  });
+});

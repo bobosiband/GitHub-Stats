@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NotFoundError } from '../lib/errors.js';
 import { syncCohort } from '../services/sync.js';
 import { evaluateCohort } from '../services/titles/engine.js';
 import {
@@ -13,6 +14,24 @@ const createCohortSchema = z.object({
   startDate: z.coerce.date(),
   endDate: z.coerce.date().optional(),
   isActive: z.boolean().default(true),
+});
+
+const repoSchema = z
+  .union([
+    z.string().regex(/^[^/\s]+\/[^/\s]+$/, 'repo must be "owner/name"'),
+    z.object({ owner: z.string().min(1), name: z.string().min(1) }),
+  ])
+  .transform((v) =>
+    typeof v === 'string' ? { owner: v.split('/')[0], name: v.split('/')[1] } : v,
+  );
+
+const programRepoBodySchema = z.object({
+  cohortSlug: z.string().min(1),
+  repo: repoSchema,
+});
+
+const programRepoQuerySchema = z.object({
+  cohortSlug: z.string().min(1),
 });
 
 export default async function adminRoutes(fastify) {
@@ -45,6 +64,64 @@ export default async function adminRoutes(fastify) {
     }
 
     return { deleted: member.githubUsername, reevaluatedCohorts: cohortIds.length };
+  });
+
+  // PUT /admin/members/:username/program-repo — organiser-managed program repo.
+  // One repo per (member, cohort) membership — replace-on-exists so re-submitting
+  // overwrites the previous entry and cleans up any historical duplicates.
+  fastify.put('/members/:username/program-repo', async (request, reply) => {
+    const { cohortSlug, repo } = programRepoBodySchema.parse(request.body ?? {});
+    const [member, cohort] = await Promise.all([
+      getMemberByUsernameOrThrow(prisma, request.params.username),
+      getCohortBySlugOrThrow(prisma, cohortSlug),
+    ]);
+    const membership = await prisma.membership.findUnique({
+      where: { memberId_cohortId: { memberId: member.id, cohortId: cohort.id } },
+    });
+    if (!membership) {
+      throw new NotFoundError(
+        `Membership not found for ${member.githubUsername} in cohort ${cohort.slug}`,
+      );
+    }
+
+    const programRepo = await prisma.$transaction(async (tx) => {
+      await tx.programRepo.deleteMany({ where: { membershipId: membership.id } });
+      return tx.programRepo.create({
+        data: { membershipId: membership.id, owner: repo.owner, name: repo.name },
+      });
+    });
+
+    reply.code(200);
+    return {
+      programRepo: {
+        cohortSlug: cohort.slug,
+        username: member.githubUsername,
+        owner: programRepo.owner,
+        name: programRepo.name,
+      },
+    };
+  });
+
+  // DELETE /admin/members/:username/program-repo?cohortSlug=...
+  fastify.delete('/members/:username/program-repo', async (request) => {
+    const { cohortSlug } = programRepoQuerySchema.parse(request.query ?? {});
+    const [member, cohort] = await Promise.all([
+      getMemberByUsernameOrThrow(prisma, request.params.username),
+      getCohortBySlugOrThrow(prisma, cohortSlug),
+    ]);
+    const membership = await prisma.membership.findUnique({
+      where: { memberId_cohortId: { memberId: member.id, cohortId: cohort.id } },
+    });
+    if (!membership) {
+      throw new NotFoundError(
+        `Membership not found for ${member.githubUsername} in cohort ${cohort.slug}`,
+      );
+    }
+
+    const { count } = await prisma.programRepo.deleteMany({
+      where: { membershipId: membership.id },
+    });
+    return { deleted: count };
   });
 
   // POST /admin/sync/:slug — manual sync + title evaluation
