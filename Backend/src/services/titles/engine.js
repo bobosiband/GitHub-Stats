@@ -152,16 +152,23 @@ export async function evaluateCohort({ prisma, cohortId, now = new Date() }) {
   const titleByKey = new Map(titles.map((t) => [t.key, t]));
   const latest = await loadLatestSnapshots(prisma, cohortId);
 
-  await prisma.$transaction(async (tx) => {
-    for (const rule of RECORD_RULES) {
-      const title = titleByKey.get(rule.key);
-      if (title) await evaluateRecord(tx, { title, rule, cohortId, latest, now });
-    }
-    for (const rule of BADGE_RULES) {
-      const title = titleByKey.get(rule.key);
-      if (title) await evaluateBadge(tx, { title, rule, cohortId, latest, now });
-    }
-  });
+  // Prisma's default interactive-transaction timeout is 5s, which we blow past
+  // under managed-Postgres round-trip latency (14 rules × N members of serial
+  // findFirst/update calls) — P2028 "transaction not found" is what surfaces.
+  // Give it real headroom; evaluation is idempotent, so worst-case retry is cheap.
+  await prisma.$transaction(
+    async (tx) => {
+      for (const rule of RECORD_RULES) {
+        const title = titleByKey.get(rule.key);
+        if (title) await evaluateRecord(tx, { title, rule, cohortId, latest, now });
+      }
+      for (const rule of BADGE_RULES) {
+        const title = titleByKey.get(rule.key);
+        if (title) await evaluateBadge(tx, { title, rule, cohortId, latest, now });
+      }
+    },
+    { timeout: 60_000, maxWait: 10_000 },
+  );
 
   return { records: RECORD_RULES.length, badges: BADGE_RULES.length, members: latest.size };
 }
