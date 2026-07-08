@@ -123,6 +123,8 @@ it with `npm run docs:gen`.
 | `GET /members/:username/calendar?cohort=…` | — | Daily contribution calendar from the latest snapshot. |
 | `POST /cohorts/:slug/join`           | —     | **Public** self-serve join (see below).                       |
 | `POST /admin/cohorts`                | admin | Create a cohort.                                              |
+| `PATCH /admin/cohorts/:slug`         | admin | Update mutable fields. Date changes trigger a background re-sync. Global cohort accepts only `name`. |
+| `DELETE /admin/cohorts/:slug`        | admin | Delete a cohort + its scoped memberships/snapshots/awards. Members survive. |
 | `DELETE /admin/members/:username`    | admin | Remove a member (cascades), then re-evaluate affected cohorts.|
 | `PUT /admin/members/:username/program-repo` | admin | Register/replace an organiser-managed program repo for the member's membership in a cohort. |
 | `DELETE /admin/members/:username/program-repo?cohortSlug=…` | admin | Remove the organiser-registered program repo. |

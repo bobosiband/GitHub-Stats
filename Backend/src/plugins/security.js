@@ -18,7 +18,7 @@ async function securityPlugin(fastify, opts) {
   const corsOrigins = opts.corsOrigins ?? [];
   await fastify.register(fastifyCors, {
     origin: corsOrigins,
-    methods: ['GET', 'POST', 'DELETE'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     credentials: false,
   });
 

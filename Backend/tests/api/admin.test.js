@@ -509,3 +509,210 @@ describe('DELETE /admin/members/:username/program-repo', () => {
     expect(res.statusCode).toBe(401);
   });
 });
+
+describe('PATCH /admin/cohorts/:slug', () => {
+  it('updates mutable fields (name + slug + endDate) and returns the new cohort', async () => {
+    const cohort = await makeCohort({ slug: 'old-slug', name: 'Old Name' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/admin/cohorts/old-slug',
+      headers: adminHeaders,
+      payload: {
+        name: 'New Name',
+        slug: 'new-slug',
+        endDate: '2027-01-01T00:00:00Z',
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.cohort).toMatchObject({ slug: 'new-slug', name: 'New Name' });
+    expect(body.resyncTriggered).toBe(true); // endDate changed → resync fires
+    const reloaded = await prisma.cohort.findUnique({ where: { id: cohort.id } });
+    expect(reloaded.slug).toBe('new-slug');
+    expect(reloaded.name).toBe('New Name');
+  });
+
+  it('does NOT trigger a resync when only the name changes', async () => {
+    await makeCohort({ slug: 'name-only', name: 'Before' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/admin/cohorts/name-only',
+      headers: adminHeaders,
+      payload: { name: 'After' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().resyncTriggered).toBe(false);
+  });
+
+  it('rejects merged dates where endDate is not strictly after startDate', async () => {
+    await makeCohort({
+      slug: 'window-bad',
+      startDate: new Date('2026-03-01T00:00:00Z'),
+      endDate: null,
+    });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/admin/cohorts/window-bad',
+      headers: adminHeaders,
+      payload: { endDate: '2025-01-01T00:00:00Z' }, // before stored startDate
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('returns 409 when the new slug is already taken', async () => {
+    await makeCohort({ slug: 'taken' });
+    await makeCohort({ slug: 'rename-me' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/admin/cohorts/rename-me',
+      headers: adminHeaders,
+      payload: { slug: 'taken' },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe('CONFLICT');
+  });
+
+  it('returns 404 for an unknown slug', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/admin/cohorts/nope',
+      headers: adminHeaders,
+      payload: { name: 'X' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('rejects an empty body with 400', async () => {
+    await makeCohort({ slug: 'empty' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/admin/cohorts/empty',
+      headers: adminHeaders,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('rejects unknown fields with 400 (strict body)', async () => {
+    await makeCohort({ slug: 'strict-me' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/admin/cohorts/strict-me',
+      headers: adminHeaders,
+      payload: { kind: 'GLOBAL' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('allows renaming the global cohort but blocks any other field with 403', async () => {
+    const ok = await app.inject({
+      method: 'PATCH',
+      url: '/admin/cohorts/global',
+      headers: adminHeaders,
+      payload: { name: 'Every Contributor' },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().cohort.name).toBe('Every Contributor');
+
+    for (const bad of [
+      { slug: 'renamed' },
+      { isActive: false },
+      { startDate: '2027-01-01' },
+      { endDate: '2027-01-01' },
+    ]) {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/admin/cohorts/global',
+        headers: adminHeaders,
+        payload: bad,
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error.code).toBe('FORBIDDEN');
+    }
+  });
+
+  it('requires a token', async () => {
+    await makeCohort({ slug: 'noauth' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/admin/cohorts/noauth',
+      payload: { name: 'X' },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+});
+
+describe('DELETE /admin/cohorts/:slug', () => {
+  it('deletes the cohort + cascades scoped rows, returning counts', async () => {
+    const cohort = await makeCohort({ slug: 'gone' });
+    const alice = await makeMember({ githubUsername: 'a-del', zid: 'z1600001' });
+    const bob = await makeMember({ githubUsername: 'b-del', zid: 'z1600002' });
+    await makeMembership(alice.id, cohort.id);
+    await makeMembership(bob.id, cohort.id);
+    // Also put alice on the global cohort — she must survive the delete.
+    const globalCohort = await prisma.cohort.findUnique({ where: { slug: 'global' } });
+    await makeMembership(alice.id, globalCohort.id);
+    await makeSnapshot(alice.id, cohort.id, { totalCommits: 100, totalContributions: 120 });
+    await makeSnapshot(bob.id, cohort.id, { totalCommits: 60, totalContributions: 60 });
+    await evaluateCohort({ prisma, cohortId: cohort.id });
+
+    const preAwards = await prisma.titleAward.count({ where: { cohortId: cohort.id } });
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/admin/cohorts/gone',
+      headers: adminHeaders,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toMatchObject({
+      deleted: true,
+      cohort: { slug: 'gone' },
+      counts: { memberships: 2, snapshots: 2, awards: preAwards, titles: 0 },
+    });
+
+    // Cohort is gone; cascade removed scoped rows.
+    expect(await prisma.cohort.findUnique({ where: { slug: 'gone' } })).toBeNull();
+    expect(await prisma.membership.count({ where: { cohortId: cohort.id } })).toBe(0);
+    expect(await prisma.statSnapshot.count({ where: { cohortId: cohort.id } })).toBe(0);
+    expect(await prisma.titleAward.count({ where: { cohortId: cohort.id } })).toBe(0);
+
+    // The members themselves survive.
+    expect(await prisma.member.findUnique({ where: { githubUsername: 'a-del' } })).not.toBeNull();
+    expect(await prisma.member.findUnique({ where: { githubUsername: 'b-del' } })).not.toBeNull();
+    // Alice keeps her global membership.
+    const stillOnGlobal = await prisma.membership.findFirst({
+      where: { memberId: alice.id, cohortId: globalCohort.id },
+    });
+    expect(stillOnGlobal).not.toBeNull();
+  });
+
+  it('refuses to delete the global cohort with 403', async () => {
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/admin/cohorts/global',
+      headers: adminHeaders,
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.code).toBe('FORBIDDEN');
+    // Still there.
+    expect(await prisma.cohort.findUnique({ where: { slug: 'global' } })).not.toBeNull();
+  });
+
+  it('returns 404 for an unknown slug', async () => {
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/admin/cohorts/nope',
+      headers: adminHeaders,
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('requires a token', async () => {
+    await makeCohort({ slug: 'noauth-del' });
+    const res = await app.inject({ method: 'DELETE', url: '/admin/cohorts/noauth-del' });
+    expect(res.statusCode).toBe(401);
+  });
+});

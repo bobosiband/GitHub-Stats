@@ -404,6 +404,54 @@ export const openapiDocument = {
           },
         },
       },
+      UpdateCohortRequest: {
+        type: 'object',
+        additionalProperties: false,
+        description:
+          'Patch a cohort. At least one field must be present. The `global` cohort ' +
+          'accepts only `name`; any other field 403s. `kind` is not editable.',
+        properties: {
+          name: { type: 'string' },
+          slug: { type: 'string', pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' },
+          startDate: { type: 'string', format: 'date-time' },
+          endDate: { type: 'string', format: 'date-time', nullable: true },
+          isActive: { type: 'boolean' },
+        },
+      },
+      UpdateCohortResult: {
+        type: 'object',
+        properties: {
+          cohort: { $ref: '#/components/schemas/Cohort' },
+          resyncTriggered: {
+            type: 'boolean',
+            description:
+              'True when startDate/endDate changed — the sync + title evaluation for this ' +
+              "cohort is running in the background so existing snapshots don't reflect a stale window.",
+          },
+        },
+      },
+      DeleteCohortResult: {
+        type: 'object',
+        properties: {
+          deleted: { type: 'boolean', enum: [true] },
+          cohort: {
+            type: 'object',
+            properties: { slug: { type: 'string' }, name: { type: 'string' } },
+          },
+          counts: {
+            type: 'object',
+            properties: {
+              memberships: { type: 'integer' },
+              snapshots: { type: 'integer' },
+              awards: { type: 'integer' },
+              titles: {
+                type: 'integer',
+                description: 'Always 0 — Title definitions are global, not cohort-scoped.',
+              },
+            },
+          },
+        },
+      },
       CreateCohortRequest: {
         type: 'object',
         required: ['name', 'slug', 'startDate'],
@@ -647,6 +695,44 @@ export const openapiDocument = {
           200: jsonResponse('Deletion summary', 'DeleteMemberResult'),
           401: errorResponse('Missing/invalid admin token'),
           404: errorResponse('Unknown member'),
+        },
+      },
+    },
+    '/admin/cohorts/{slug}': {
+      patch: {
+        tags: ['Admin'],
+        summary: 'Update a cohort',
+        description:
+          'Partial update — at least one editable field must be supplied. Date changes ' +
+          'trigger a background re-sync + title re-evaluation for that cohort and set ' +
+          '`resyncTriggered: true` on the response. The global cohort is protected: only ' +
+          '`name` may be changed.',
+        security: [{ bearerAuth: [] }],
+        parameters: [slugParam],
+        requestBody: jsonBody('UpdateCohortRequest'),
+        responses: {
+          200: jsonResponse('Updated cohort', 'UpdateCohortResult'),
+          400: errorResponse('Empty body, invalid dates, or unknown field'),
+          401: errorResponse('Missing/invalid admin token'),
+          403: errorResponse('Editing a protected field on the global cohort'),
+          404: errorResponse('Unknown slug'),
+          409: errorResponse('New slug is already taken'),
+        },
+      },
+      delete: {
+        tags: ['Admin'],
+        summary: 'Delete a cohort',
+        description:
+          'Cascade-deletes memberships, snapshots, and title awards for this cohort. ' +
+          'Members themselves survive (they stay on `global` and any other cohorts). ' +
+          'The global cohort cannot be deleted.',
+        security: [{ bearerAuth: [] }],
+        parameters: [slugParam],
+        responses: {
+          200: jsonResponse('Delete summary', 'DeleteCohortResult'),
+          401: errorResponse('Missing/invalid admin token'),
+          403: errorResponse('Cannot delete the global cohort'),
+          404: errorResponse('Unknown slug'),
         },
       },
     },
