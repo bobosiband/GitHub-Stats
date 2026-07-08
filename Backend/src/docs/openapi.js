@@ -294,6 +294,56 @@ export const openapiDocument = {
           },
         },
       },
+      MemberHistory: {
+        type: 'object',
+        properties: {
+          member: { $ref: '#/components/schemas/MemberPublic' },
+          cohort: { $ref: '#/components/schemas/Cohort' },
+          history: {
+            type: 'array',
+            description:
+              'Downsampled per-UTC-day snapshot rows in oldest-first order. Slim columns ' +
+              'only — no calendar or topLanguages.',
+            items: {
+              type: 'object',
+              properties: {
+                capturedAt: { type: 'string', format: 'date-time' },
+                totalCommits: { type: 'integer' },
+                totalContributions: { type: 'integer' },
+                mergedPRs: { type: 'integer' },
+                totalStars: { type: 'integer' },
+                longestStreak: { type: 'integer' },
+                currentStreak: { type: 'integer' },
+                followers: { type: 'integer' },
+              },
+            },
+          },
+        },
+      },
+      MemberCalendar: {
+        type: 'object',
+        properties: {
+          member: { $ref: '#/components/schemas/MemberPublic' },
+          cohort: { $ref: '#/components/schemas/Cohort' },
+          capturedAt: {
+            type: 'string',
+            format: 'date-time',
+            nullable: true,
+            description: '`null` when the member has no snapshot yet.',
+          },
+          calendar: {
+            type: 'array',
+            description: 'Daily contribution counts from the latest snapshot.',
+            items: {
+              type: 'object',
+              properties: {
+                date: { type: 'string', example: '2025-06-14' },
+                count: { type: 'integer', example: 3 },
+              },
+            },
+          },
+        },
+      },
       JoinRequest: {
         type: 'object',
         required: ['githubUsername', 'zid'],
@@ -512,6 +562,61 @@ export const openapiDocument = {
         responses: {
           200: jsonResponse('Member profile', 'MemberProfile'),
           404: errorResponse('Unknown member'),
+        },
+      },
+    },
+    '/members/{username}/history': {
+      get: {
+        tags: ['Members'],
+        summary: 'Time-series snapshots for a member in a cohort',
+        description:
+          'Slim, chart-friendly view — one row per UTC calendar day (the last snapshot ' +
+          'captured that day wins), oldest-first, within the last `days` days.',
+        parameters: [
+          { name: 'username', in: 'path', required: true, schema: { type: 'string' } },
+          {
+            name: 'cohort',
+            in: 'query',
+            required: true,
+            schema: { type: 'string' },
+            description: 'Cohort slug.',
+          },
+          {
+            name: 'days',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', minimum: 1, maximum: 365, default: 90 },
+          },
+        ],
+        responses: {
+          200: jsonResponse('Downsampled history', 'MemberHistory'),
+          400: errorResponse('Missing/invalid query parameters'),
+          404: errorResponse('Unknown member or cohort'),
+        },
+      },
+    },
+    '/members/{username}/calendar': {
+      get: {
+        tags: ['Members'],
+        summary: "Latest contribution-calendar for a member in a cohort",
+        description:
+          "Returns the daily `{date, count}` calendar embedded in the member's most recent " +
+          'snapshot for the given cohort. Returns `capturedAt: null` and an empty calendar ' +
+          '(200, not 404) when the member has no snapshot yet.',
+        parameters: [
+          { name: 'username', in: 'path', required: true, schema: { type: 'string' } },
+          {
+            name: 'cohort',
+            in: 'query',
+            required: true,
+            schema: { type: 'string' },
+            description: 'Cohort slug.',
+          },
+        ],
+        responses: {
+          200: jsonResponse('Latest calendar', 'MemberCalendar'),
+          400: errorResponse('Missing `cohort` query parameter'),
+          404: errorResponse('Unknown member or cohort'),
         },
       },
     },

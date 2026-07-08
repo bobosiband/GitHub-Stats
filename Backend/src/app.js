@@ -18,6 +18,7 @@ import cohortRoutes from './routes/cohorts.js';
 import leaderboardRoutes from './routes/leaderboard.js';
 import titleRoutes from './routes/titles.js';
 import memberRoutes from './routes/members.js';
+import historyRoutes from './routes/history.js';
 import adminRoutes from './routes/admin.js';
 
 /**
@@ -86,6 +87,7 @@ export async function buildApp(opts = {}) {
   await app.register(leaderboardRoutes, { prefix: '/cohorts' });
   await app.register(titleRoutes, { prefix: '/cohorts' });
   await app.register(memberRoutes, { prefix: '/members' });
+  await app.register(historyRoutes, { prefix: '/members' });
   await app.register(adminRoutes, { prefix: '/admin' });
 
   return app;

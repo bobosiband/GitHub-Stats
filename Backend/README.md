@@ -119,6 +119,8 @@ it with `npm run docs:gen`.
 | `GET /cohorts/:slug/leaderboard`     | —     | Ranked members. `?sort=commits\|contributions\|streak\|stars`.|
 | `GET /cohorts/:slug/titles`          | —     | All titles with current holders / badge earners.              |
 | `GET /members/:username`             | —     | Profile: latest stats per cohort, titles (incl. past), badges.|
+| `GET /members/:username/history?cohort=…&days=…` | — | Slim time-series (per-UTC-day, oldest-first) for progress charts. |
+| `GET /members/:username/calendar?cohort=…` | — | Daily contribution calendar from the latest snapshot. |
 | `POST /cohorts/:slug/join`           | —     | **Public** self-serve join (see below).                       |
 | `POST /admin/cohorts`                | admin | Create a cohort.                                              |
 | `DELETE /admin/members/:username`    | admin | Remove a member (cascades), then re-evaluate affected cohorts.|

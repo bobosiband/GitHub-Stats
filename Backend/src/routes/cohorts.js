@@ -3,7 +3,13 @@ import { NotFoundError } from '../lib/errors.js';
 import { serializeCohort, buildMemberProfile } from '../services/views.js';
 import { joinCohort } from '../services/join.js';
 
-const zidSchema = z.string().regex(/^z\d{7}$/, 'zid must be "z" followed by exactly 7 digits');
+// Trim + lowercase before pattern-checking so "Z5312847" and " z5312847 " both
+// pass and land in the DB as "z5312847" — no reason to 400 on a stray uppercase.
+// Truly invalid formats (missing digits, wrong prefix) still fail.
+const zidSchema = z
+  .string()
+  .transform((s) => s.trim().toLowerCase())
+  .pipe(z.string().regex(/^z\d{7}$/, 'zid must be "z" followed by exactly 7 digits'));
 const usernameSchema = z
   .string()
   .regex(/^[a-zA-Z\d](?:[a-zA-Z\d]|-(?=[a-zA-Z\d])){0,38}$/, 'invalid GitHub username');

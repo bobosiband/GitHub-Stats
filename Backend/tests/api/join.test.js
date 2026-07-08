@@ -113,6 +113,23 @@ describe('POST /cohorts/:slug/join', () => {
     expect(res.json().error.code).toBe('VALIDATION_ERROR');
   });
 
+  it('normalises uppercase zid to lowercase (Z5312847 → z5312847)', async () => {
+    await makeCohort({ slug: 'open', isActive: true });
+    const res = await join('open', { githubUsername: 'capsuser', zid: 'Z5312847' });
+    expect(res.statusCode).toBe(201);
+    // Fix 1 stripped zid from responses — check the DB row instead.
+    const stored = await prisma.member.findUnique({ where: { githubUsername: 'capsuser' } });
+    expect(stored.zid).toBe('z5312847');
+  });
+
+  it('trims surrounding whitespace on the zid', async () => {
+    await makeCohort({ slug: 'open', isActive: true });
+    const res = await join('open', { githubUsername: 'padded', zid: '  z5312848  ' });
+    expect(res.statusCode).toBe(201);
+    const stored = await prisma.member.findUnique({ where: { githubUsername: 'padded' } });
+    expect(stored.zid).toBe('z5312848');
+  });
+
   it('rejects a duplicate zid (different username) with 409', async () => {
     await makeCohort({ slug: 'open', isActive: true });
     await makeMember({ githubUsername: 'original', zid: 'z9000002' });
