@@ -102,6 +102,42 @@ describe('syncCohort', () => {
     expect(refreshedAlice.accountCreatedAt.toISOString()).toBe('2018-01-01T00:00:00.000Z');
   });
 
+  it('refreshes displayName on sync so GitHub renames propagate', async () => {
+    const cohort = await makeCohort();
+    const alice = await makeMember({
+      githubUsername: 'alice',
+      zid: 'z1111111',
+      displayName: 'Old Name',
+    });
+    await makeMembership(alice.id, cohort.id);
+
+    const fetchUserStats = fakeFetcher({
+      alice: stats({ displayName: 'Renamed Alice', login: 'alice' }),
+    });
+    await syncCohort({ prisma, fetchUserStats, cohortId: cohort.id, now: NOW, delayMs: 0 });
+
+    const refreshed = await prisma.member.findUnique({ where: { id: alice.id } });
+    expect(refreshed.displayName).toBe('Renamed Alice');
+  });
+
+  it('falls back to the GitHub login on sync when the profile has no name', async () => {
+    const cohort = await makeCohort();
+    const alice = await makeMember({
+      githubUsername: 'alice',
+      zid: 'z1111111',
+      displayName: 'Prior',
+    });
+    await makeMembership(alice.id, cohort.id);
+
+    const fetchUserStats = fakeFetcher({
+      alice: stats({ displayName: null, login: 'alice' }),
+    });
+    await syncCohort({ prisma, fetchUserStats, cohortId: cohort.id, now: NOW, delayMs: 0 });
+
+    const refreshed = await prisma.member.findUnique({ where: { id: alice.id } });
+    expect(refreshed.displayName).toBe('alice');
+  });
+
   it('records per-member errors without aborting the run', async () => {
     const cohort = await makeCohort();
     const good = await makeMember({ githubUsername: 'good', zid: 'z3333333' });

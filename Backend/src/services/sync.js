@@ -92,12 +92,15 @@ async function snapshotMembership({ prisma, fetchUserStats, membership, now, log
     today: now,
   });
 
+  // Refresh cached profile fields from the freshly-fetched stats so GitHub
+  // renames/avatar changes propagate. Only fall back to the stored value if
+  // GitHub returned nothing.
   await prisma.member.update({
     where: { id: member.id },
     data: {
       githubId: stats.githubId ?? member.githubId,
       avatarUrl: stats.avatarUrl ?? member.avatarUrl,
-      displayName: member.displayName ?? stats.displayName,
+      displayName: stats.displayName ?? stats.login ?? member.displayName,
       accountCreatedAt: stats.accountCreatedAt ?? member.accountCreatedAt,
     },
   });

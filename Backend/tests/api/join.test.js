@@ -8,13 +8,15 @@ const prisma = getPrisma();
 let app;
 
 // Dispatching verifier: 'ghostuser' does not exist on GitHub; everyone else does.
+// 'nonameuser' models a GitHub profile with no `name` set so we can prove the
+// login fallback works.
 const verifyGithubUser = async ({ username }) => {
   if (username === 'ghostuser') throw new GithubUserNotFoundError(username);
   return {
     githubId: 900,
     nodeId: `N-${username}`,
     login: username,
-    displayName: `The ${username}`,
+    displayName: username === 'nonameuser' ? null : `The ${username}`,
     avatarUrl: `https://avatar/${username}`,
     accountCreatedAt: new Date('2017-05-05T00:00:00Z'),
   };
@@ -33,13 +35,11 @@ const join = (slug, body) =>
   app.inject({ method: 'POST', url: `/cohorts/${slug}/join`, payload: body });
 
 describe('POST /cohorts/:slug/join', () => {
-  it('happy path: creates Member + Membership + ProgramRepo and returns the profile', async () => {
+  it('happy path: exactly two fields; displayName auto-populates from the GitHub profile', async () => {
     await makeCohort({ slug: 'open', isActive: true });
     const res = await join('open', {
       githubUsername: 'newbie',
       zid: 'z9000001',
-      displayName: 'New Bie',
-      programRepo: 'newbie/project',
     });
 
     expect(res.statusCode).toBe(201);
@@ -47,18 +47,59 @@ describe('POST /cohorts/:slug/join', () => {
     expect(body.member).toMatchObject({
       githubUsername: 'newbie',
       zid: 'z9000001',
-      displayName: 'New Bie',
+      displayName: 'The newbie',
+      avatarUrl: 'https://avatar/newbie',
     });
     // Program cohort + auto-added global cohort.
     expect(body.cohorts).toHaveLength(2);
-    const openCohort = body.cohorts.find((c) => c.cohort.slug === 'open');
-    expect(openCohort.programRepos).toEqual([{ owner: 'newbie', name: 'project' }]);
     expect(body.cohorts.map((c) => c.cohort.slug).sort()).toEqual(['global', 'open']);
+    // No program repo is set at join time — that is now an admin-only operation.
+    for (const c of body.cohorts) expect(c.programRepos).toEqual([]);
 
     expect(await prisma.member.count()).toBe(1);
-    // 1 for the program cohort, 1 for the global cohort.
     expect(await prisma.membership.count()).toBe(2);
-    expect(await prisma.programRepo.count()).toBe(1);
+    expect(await prisma.programRepo.count()).toBe(0);
+  });
+
+  it('falls back to the GitHub login when the profile has no `name`', async () => {
+    await makeCohort({ slug: 'open', isActive: true });
+    const res = await join('open', { githubUsername: 'nonameuser', zid: 'z9000030' });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().member.displayName).toBe('nonameuser');
+  });
+
+  it('rejects a request that carries programRepo with a friendly 400', async () => {
+    await makeCohort({ slug: 'open', isActive: true });
+    const res = await join('open', {
+      githubUsername: 'newbie',
+      zid: 'z9000031',
+      programRepo: 'newbie/project',
+    });
+    expect(res.statusCode).toBe(400);
+    const body = res.json();
+    expect(body.error.code).toBe('VALIDATION_ERROR');
+    expect(body.error.details).toContainEqual({
+      path: 'programRepo',
+      message: 'unexpected field "programRepo" — join only needs githubUsername and zid',
+    });
+    // Nothing should have been created.
+    expect(await prisma.member.count()).toBe(0);
+  });
+
+  it('rejects a request that carries displayName with a friendly 400', async () => {
+    await makeCohort({ slug: 'open', isActive: true });
+    const res = await join('open', {
+      githubUsername: 'newbie',
+      zid: 'z9000032',
+      displayName: 'Manual Name',
+    });
+    expect(res.statusCode).toBe(400);
+    const body = res.json();
+    expect(body.error.code).toBe('VALIDATION_ERROR');
+    expect(body.error.details).toContainEqual({
+      path: 'displayName',
+      message: 'unexpected field "displayName" — join only needs githubUsername and zid',
+    });
   });
 
   it('rejects an invalid zid format with 400', async () => {

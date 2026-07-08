@@ -7,21 +7,25 @@ const zidSchema = z.string().regex(/^z\d{7}$/, 'zid must be "z" followed by exac
 const usernameSchema = z
   .string()
   .regex(/^[a-zA-Z\d](?:[a-zA-Z\d]|-(?=[a-zA-Z\d])){0,38}$/, 'invalid GitHub username');
-const programRepoSchema = z
-  .union([
-    z.string().regex(/^[^/\s]+\/[^/\s]+$/, 'programRepo must be "owner/name"'),
-    z.object({ owner: z.string().min(1), name: z.string().min(1) }),
-  ])
-  .transform((v) =>
-    typeof v === 'string' ? { owner: v.split('/')[0], name: v.split('/')[1] } : v,
-  );
 
-const joinBodySchema = z.object({
-  githubUsername: usernameSchema,
-  zid: zidSchema,
-  displayName: z.string().min(1).max(100).optional(),
-  programRepo: programRepoSchema.optional(),
-});
+// Strict: any extra field is rejected with a friendly message so callers
+// don't think a silently-ignored `programRepo` or `displayName` did something.
+const joinBodySchema = z
+  .object({
+    githubUsername: usernameSchema,
+    zid: zidSchema,
+  })
+  .passthrough()
+  .superRefine((val, ctx) => {
+    for (const key of Object.keys(val)) {
+      if (key === 'githubUsername' || key === 'zid') continue;
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [key],
+        message: `unexpected field "${key}" — join only needs githubUsername and zid`,
+      });
+    }
+  });
 
 export default async function cohortRoutes(fastify) {
   const { prisma } = fastify;

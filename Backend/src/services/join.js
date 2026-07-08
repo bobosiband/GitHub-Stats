@@ -12,13 +12,12 @@ import { GLOBAL_COHORT_SLUG } from './global.js';
  * @param {import('@prisma/client').PrismaClient} params.prisma
  * @param {Function} params.verifyGithubUser  ({username}) => profile | throws
  * @param {string} params.slug
- * @param {{githubUsername: string, zid: string, displayName?: string,
- *   programRepo?: {owner: string, name: string}}} params.input
+ * @param {{githubUsername: string, zid: string}} params.input
  * @param {Date} [params.now]
  * @returns {Promise<import('@prisma/client').Member>}
  */
 export async function joinCohort({ prisma, verifyGithubUser, slug, input, now = new Date() }) {
-  const { githubUsername, zid, displayName, programRepo } = input;
+  const { githubUsername, zid } = input;
 
   const cohort = await getCohortBySlugOrThrow(prisma, slug); // 404 for unknown slug
   if (!cohort.isActive) throw new ForbiddenError('This cohort is not open for joining');
@@ -59,18 +58,18 @@ export async function joinCohort({ prisma, verifyGithubUser, slug, input, now = 
   return prisma.$transaction(async (tx) => {
     let m = member;
     if (!m) {
+      // displayName auto-populates from the GitHub profile's `name`, falling
+      // back to the login so we always have something human-readable.
       m = await tx.member.create({
         data: {
           githubUsername,
           zid,
-          displayName: displayName ?? profile.displayName ?? null,
+          displayName: profile.displayName ?? profile.login ?? githubUsername,
           avatarUrl: profile.avatarUrl ?? null,
           githubId: profile.githubId ?? null,
           accountCreatedAt: profile.accountCreatedAt ?? null,
         },
       });
-    } else if (displayName && !m.displayName) {
-      m = await tx.member.update({ where: { id: m.id }, data: { displayName } });
     }
 
     const existing = await tx.membership.findUnique({
@@ -78,15 +77,9 @@ export async function joinCohort({ prisma, verifyGithubUser, slug, input, now = 
     });
     if (existing) throw new ConflictError('This member has already joined this cohort');
 
-    const membership = await tx.membership.create({
+    await tx.membership.create({
       data: { memberId: m.id, cohortId: cohort.id },
     });
-
-    if (programRepo) {
-      await tx.programRepo.create({
-        data: { membershipId: membership.id, owner: programRepo.owner, name: programRepo.name },
-      });
-    }
 
     // Auto-membership: every joiner also lands on the singleton global cohort
     // (unless they're joining IT directly). `upsert` on the (memberId, cohortId)
