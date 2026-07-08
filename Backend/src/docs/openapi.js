@@ -44,7 +44,10 @@ export const openapiDocument = {
       'always-on `global` cohort, which uses a rolling 365-day window. Reads are ' +
       'public; `/admin/*` routes require a static bearer token.',
   },
-  servers: [{ url: 'http://localhost:3000', description: 'Local development' }],
+  servers: [
+    { url: 'https://gitrank-backend.onrender.com', description: 'Production (Render)' },
+    { url: 'http://localhost:3000', description: 'Local development' },
+  ],
   tags: [
     { name: 'System', description: 'Health and service metadata.' },
     { name: 'Cohorts', description: 'Cohort listing, detail, and public self-serve join.' },
