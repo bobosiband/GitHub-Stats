@@ -28,5 +28,4 @@ jobs:
           curl --fail-with-body --silent --show-error \
             --max-time 300 \
             -X POST "${APP_URL%/}/admin/sync-all" \
-            -H "Authorization: Bearer ${ADMIN_TOKEN}" \
-            -H "Content-Type: application/json"
+            -H "Authorization: Bearer ${ADMIN_TOKEN}"

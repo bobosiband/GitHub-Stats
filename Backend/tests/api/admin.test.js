@@ -162,6 +162,21 @@ describe('POST /admin/sync-all', () => {
     expect(res.statusCode).toBe(401);
   });
 
+  // Regression guard for .github/workflows/sync.yml: the scheduled workflow
+  // POSTs with only an Authorization header and no body. If a future change
+  // starts requiring a JSON body (or a content-type header alongside an empty
+  // body), Fastify's content parser will 400 the workflow.
+  it('accepts a bodiless POST with only the Authorization header', async () => {
+    await makeCohort({ slug: 'shape' });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/sync-all',
+      headers: { authorization: adminHeaders.authorization },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().skipped).toBe(false);
+  });
+
   it('runs the sync runner across every active cohort and returns its summary', async () => {
     const cohort = await makeCohort({ slug: 'multi' });
     const alice = await makeMember({ githubUsername: 'alice', zid: 'z1000001' });
