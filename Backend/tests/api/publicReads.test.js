@@ -259,4 +259,78 @@ describe('GET /members/:username', () => {
 
     expect(body.badges.some((b) => b.key === 'century')).toBe(true);
   });
+
+  it('regression (bug A1): every cohort with a snapshot has a non-null progression object', async () => {
+    const cohort = await makeCohort({ slug: 'prog-check' });
+    const m = await makeMember({ githubUsername: 'progger', zid: 'z3100001' });
+    await makeMembership(m.id, cohort.id);
+    // A snapshot with real activity — xp must be > 0 and progression must
+    // roll up level/levelProgress/xpToNextLevel.
+    await makeSnapshot(m.id, cohort.id, {
+      totalCommits: 100,
+      totalContributions: 150,
+      totalPRs: 5,
+      reviewsGiven: 3,
+      topLanguages: [{ name: 'TypeScript', bytes: 200_000 }],
+      languageCount: 2,
+      currentStreak: 5,
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/members/progger' });
+    const body = res.json();
+    const c = body.cohorts.find((x) => x.cohort.slug === 'prog-check');
+    expect(c.progression).not.toBeNull();
+    expect(c.progression.xp).toBeGreaterThan(0);
+    expect(c.progression.level).toBeGreaterThanOrEqual(1);
+    expect(c.progression.xpToNextLevel).toBeGreaterThanOrEqual(0);
+    expect(c.progression.levelProgress).toBeGreaterThanOrEqual(0);
+    expect(c.progression.levelProgress).toBeLessThanOrEqual(1);
+    // Snapshot.xp is present on the wire.
+    expect(c.stats.xp).toBe(c.progression.xp);
+  });
+
+  it('regression (bug A1): progression is EXPLICITLY null when a cohort has no snapshot', async () => {
+    // The earlier code silently coerced xp to 0 and returned {level:0, xp:0,…},
+    // which is indistinguishable from "member with 0 real XP". Explicit null
+    // means the UI can render "first sync pending" instead of "Level 0".
+    const cohort = await makeCohort({ slug: 'nosnap' });
+    const m = await makeMember({ githubUsername: 'newbie2', zid: 'z3100002' });
+    await makeMembership(m.id, cohort.id);
+
+    const res = await app.inject({ method: 'GET', url: '/members/newbie2' });
+    const c = res.json().cohorts.find((x) => x.cohort.slug === 'nosnap');
+    expect(c.progression).toBeNull();
+    expect(c.stats).toBeNull();
+  });
+
+  it('regression (bug A4): each topLanguages entry ships per-language xp and xpCap', async () => {
+    const cohort = await makeCohort({ slug: 'lang-annot' });
+    const m = await makeMember({ githubUsername: 'polyglot2', zid: 'z3100003' });
+    await makeMembership(m.id, cohort.id);
+    await makeSnapshot(m.id, cohort.id, {
+      totalCommits: 50,
+      topLanguages: [
+        { name: 'JavaScript', bytes: 200_000 },
+        { name: 'CSS', bytes: 1_000 },
+        { name: 'HTML', bytes: 10_000_000_000 }, // → capped
+      ],
+      languageCount: 3,
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/members/polyglot2' });
+    const c = res.json().cohorts.find((x) => x.cohort.slug === 'lang-annot');
+    const langs = c.stats.topLanguages;
+    expect(langs).toHaveLength(3);
+    for (const l of langs) {
+      expect(typeof l.xp).toBe('number');
+      expect(l.xpCap).toBe(300);
+      expect(l.xp).toBeGreaterThanOrEqual(0);
+      expect(l.xp).toBeLessThanOrEqual(300);
+    }
+    // The huge one hits the cap; CSS at 1000 bytes → exactly 30.
+    const huge = langs.find((l) => l.name === 'HTML');
+    expect(huge.xp).toBe(300);
+    const tiny = langs.find((l) => l.name === 'CSS');
+    expect(tiny.xp).toBe(30);
+  });
 });

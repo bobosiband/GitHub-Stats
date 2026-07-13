@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useReducedMotion } from '../../hooks/useReducedMotion.js';
+import { buildGrid, ROWS } from '../../lib/heatmap.js';
 
 /**
  * GitHub-style contribution heatmap: **7 rows (day-of-week) × ~53 columns
@@ -19,93 +20,20 @@ import { useReducedMotion } from '../../hooks/useReducedMotion.js';
  * Intensity buckets use **quartiles of the member's own nonzero days** so an
  * "average" day for a low-activity member still shows green — matches GitHub's
  * per-user scaling.
- */
-
-const WEEKS = 53;
-const ROWS = 7;
-
-// Dark theme green ramp — matches GitHub's dark-mode heatmap.
-const RAMP = ['#161b22', '#0e4429', '#006d32', '#26a641', '#39d353'];
-
-function isoDate(d) {
-  return d.toISOString().slice(0, 10);
-}
-
-/**
- * Build a matrix of `WEEKS` columns × 7 rows, anchored to `anchor`.
- * The last column ends on the Saturday of `anchor`'s week (rolling forward
- * to complete the current week — future days in that column render as empty).
- * Flat output order is column-major so it lines up with `gridAutoFlow: column`.
  *
- * Exported for testing.
+ * The pure grid+bucketing math lives in `src/lib/heatmap.js` so it can be
+ * unit-tested without a React renderer.
  */
-export function buildGrid(calendar, anchor = new Date()) {
-  const byDate = new Map();
-  for (const entry of calendar ?? []) {
-    if (entry?.date) byDate.set(entry.date, Number(entry.count) || 0);
-  }
 
-  // Anchor is normalised to UTC midnight so the day-of-week arithmetic below
-  // isn't sensitive to the caller's local timezone.
-  const anchored = new Date(anchor);
-  anchored.setUTCHours(0, 0, 0, 0);
-  const dow = anchored.getUTCDay(); // 0 = Sun … 6 = Sat
-  const lastColSat = new Date(anchored);
-  lastColSat.setUTCDate(anchored.getUTCDate() + (6 - dow));
-
-  // Distribution for the bucketer: nonzero counts across the visible window.
-  const distribution = [];
-  const grid = []; // column-major
-  for (let w = WEEKS - 1; w >= 0; w--) {
-    const column = [];
-    for (let d = 0; d < ROWS; d++) {
-      const cur = new Date(lastColSat);
-      cur.setUTCDate(lastColSat.getUTCDate() - w * ROWS - (6 - d));
-      const isFuture = cur.getTime() > anchored.getTime();
-      const key = isoDate(cur);
-      const count = byDate.get(key) ?? 0;
-      if (count > 0) distribution.push(count);
-      column.push({ date: key, count, future: isFuture });
-    }
-    grid.push(column);
-  }
-
-  const bucketFor = bucketerFor(distribution);
-  const cells = [];
-  for (const column of grid) {
-    for (const day of column) {
-      cells.push({ ...day, bucket: day.future ? 0 : bucketFor(day.count) });
-    }
-  }
-  return cells;
-}
-
-/**
- * Quartile-based bucketer. Returns a function `count -> 0..4`.
- * Zero always → 0. Nonzero counts land in the quartile of the member's
- * nonzero-day distribution — so a low-activity member still sees varied green,
- * and a high-activity member's small days don't wash out.
- *
- * Exported for testing.
- */
-export function bucketerFor(nonzeroCounts) {
-  if (!nonzeroCounts.length) {
-    // Nothing to bucket → constant 0 (all grey).
-    return (count) => (count > 0 ? 4 : 0);
-  }
-  const sorted = [...nonzeroCounts].sort((a, b) => a - b);
-  const q = (p) => sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))];
-  const q1 = q(0.25);
-  const q2 = q(0.5);
-  const q3 = q(0.75);
-  return (count) => {
-    if (count <= 0) return 0;
-    if (count <= q1) return 1;
-    if (count <= q2) return 2;
-    if (count <= q3) return 3;
-    return 4;
-  };
-}
+// Ramp reads through `var(--duo-contrib-N)` so the light/dark toggle in the
+// header flips the greens to match GitHub's own theme-specific palettes.
+const RAMP = [
+  'var(--duo-contrib-0)',
+  'var(--duo-contrib-1)',
+  'var(--duo-contrib-2)',
+  'var(--duo-contrib-3)',
+  'var(--duo-contrib-4)',
+];
 
 export default function ContributionHeatmap({ calendar = [], capturedAt = null }) {
   const reduced = useReducedMotion();

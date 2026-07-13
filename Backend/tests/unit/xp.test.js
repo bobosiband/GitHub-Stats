@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { computeXp, levelForXp, xpForLevel, levelProgress, xpSummary } from '../../src/services/xp.js';
+import {
+  computeXp,
+  levelForXp,
+  xpForLevel,
+  levelProgress,
+  xpSummary,
+  perLanguageXp,
+  PER_LANGUAGE_XP_CAP,
+} from '../../src/services/xp.js';
 
 /**
  * Zeroed baseline stats — every term contributes 0. Tests mutate one field at
@@ -209,5 +217,76 @@ describe('xpSummary — the shape returned on the profile', () => {
   it('coerces null/undefined xp to 0', () => {
     expect(xpSummary(null).xp).toBe(0);
     expect(xpSummary(undefined).xp).toBe(0);
+  });
+});
+
+describe('perLanguageXp — exported helper the API annotates topLanguages with', () => {
+  it('returns 0 for zero / negative / non-numeric byte counts', () => {
+    expect(perLanguageXp(0)).toBe(0);
+    expect(perLanguageXp(-100)).toBe(0);
+    expect(perLanguageXp(NaN)).toBe(0);
+    expect(perLanguageXp(null)).toBe(0);
+    expect(perLanguageXp(undefined)).toBe(0);
+  });
+
+  it('caps at PER_LANGUAGE_XP_CAP (300)', () => {
+    expect(perLanguageXp(10_000_000_000)).toBe(PER_LANGUAGE_XP_CAP);
+    expect(perLanguageXp(1_000_000_000)).toBe(PER_LANGUAGE_XP_CAP);
+  });
+
+  it('bytes=1000 → exactly 30 XP (log2(2) * 30)', () => {
+    expect(perLanguageXp(1000)).toBe(30);
+  });
+
+  it('matches the inner term of computeXp for a single-language snapshot', () => {
+    // Zero out every other term so only languageXP contributes.
+    const baseline = {
+      totalCommits: 0,
+      totalPRs: 0,
+      mergedPRs: 0,
+      reviewsGiven: 0,
+      issuesOpened: 0,
+      totalStars: 0,
+      followers: 0,
+      contributedRepoCount: 0,
+      languageCount: 1, // no polyglot bonus
+      currentStreak: 0,
+      topLanguages: [{ name: 'X', bytes: 50_000 }],
+    };
+    const total = computeXp(baseline);
+    // 30 * log2(1 + 50) ≈ 30 * 5.672 ≈ 170.2, rounded to 170
+    expect(total).toBe(Math.round(perLanguageXp(50_000)));
+  });
+});
+
+describe('regression: XP for a realistic snapshot', () => {
+  // The screenshot scenario — a member with ~400 contributions across the
+  // year, active streak, 6 languages. Must yield a non-trivial XP number that
+  // maps to a meaningful level (~10+), NOT 0.
+  it('computes a plausible XP for the screenshot scenario (~400 contributions, active streak, 6 languages)', () => {
+    const stats = {
+      totalCommits: 321,
+      totalContributions: 389,
+      totalPRs: 20,
+      mergedPRs: 12,
+      reviewsGiven: 5,
+      issuesOpened: 8,
+      totalStars: 15,
+      followers: 30,
+      contributedRepoCount: 12,
+      languageCount: 10,
+      currentStreak: 1,
+      topLanguages: [
+        { name: 'TypeScript', bytes: 900_000 },
+        { name: 'Python', bytes: 400_000 },
+        { name: 'JavaScript', bytes: 200_000 },
+        { name: 'Shell', bytes: 40_000 },
+        { name: 'CSS', bytes: 20_000 },
+      ],
+    };
+    const xp = computeXp(stats);
+    expect(xp).toBeGreaterThan(4_500); // definitely not 0
+    expect(xp).toBeLessThan(20_000);   // and not absurdly high either
+    expect(levelForXp(xp)).toBeGreaterThanOrEqual(9);
   });
 });

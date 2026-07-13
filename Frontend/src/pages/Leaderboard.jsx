@@ -86,27 +86,31 @@ export default function Leaderboard() {
 
   return (
     <section className="stack gap-24">
-      <div className="flex flex-wrap items-center gap-2">
-        {SORTS.map((s) => {
-          const active = s === sort;
-          const Meta = SORT_META[s];
-          const Icon = Meta.icon;
-          return (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setSort(s)}
-              className={
-                'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold transition-transform border-2 ' +
-                (active
-                  ? 'bg-duo-green text-black border-black/20 shadow-chunkyGreen hover:-translate-y-0.5'
-                  : 'bg-ghsurface text-ghfg border-ghborder hover:border-duo-green')
-              }
-            >
-              <Icon size={12} /> {Meta.label}
-            </button>
-          );
-        })}
+      {/* Horizontal scroll on very narrow screens; wraps on wider ones so the
+          full sort set is always reachable without truncation. */}
+      <div className="-mx-2 px-2 overflow-x-auto scrollbar-thin">
+        <div className="flex flex-nowrap sm:flex-wrap items-center gap-2 w-max sm:w-auto">
+          {SORTS.map((s) => {
+            const active = s === sort;
+            const Meta = SORT_META[s];
+            const Icon = Meta.icon;
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setSort(s)}
+                className={
+                  'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold transition-transform border-2 whitespace-nowrap ' +
+                  (active
+                    ? 'bg-duo-green text-black border-black/20 shadow-chunkyGreen hover:-translate-y-0.5'
+                    : 'bg-ghsurface text-ghfg border-ghborder hover:border-duo-green')
+                }
+              >
+                <Icon size={12} /> {Meta.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Podium */}
@@ -206,7 +210,7 @@ function LeaderboardRow({ entry, index, reduced, sort }) {
       animate={{ opacity: 1, x: 0 }}
       transition={reduced ? { duration: 0 } : { delay: index * 0.03, type: 'spring', stiffness: 260, damping: 24 }}
       whileHover={reduced ? {} : { scale: 1.005 }}
-      className="flex items-center gap-4 rounded-xl border-2 border-ghborder bg-ghsurface hover:border-duo-green px-3 py-2"
+      className="flex flex-wrap sm:flex-nowrap items-center gap-3 sm:gap-4 rounded-xl border-2 border-ghborder bg-ghsurface hover:border-duo-green px-3 py-2"
     >
       <div className="w-8 text-center font-mono text-ghmuted font-bold">{entry.rank}</div>
       <RankDeltaBadge delta={entry.rankDelta} />

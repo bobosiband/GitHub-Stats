@@ -33,6 +33,23 @@
   --fg: #1f2328;
   --fg-muted: #59636e;
   --fg-subtle: #6e7781;
+
+  /* --duo-* mirrors the same tokens for the Tailwind-classed Duolingo layer
+     under src/components/duo/. Referenced from tailwind.config.js so a theme
+     switch propagates to XP rings, heatmap, streak flame, etc. Light mode
+     leans on Primer's canvas/border colours; the contribution ramp uses
+     GitHub's light-theme greens instead of the dark-theme brights. */
+  --duo-bg: var(--canvas);
+  --duo-surface: var(--canvas-subtle);
+  --duo-inset: var(--canvas-inset);
+  --duo-border: var(--border);
+  --duo-fg: var(--fg);
+  --duo-muted: var(--fg-muted);
+  --duo-contrib-0: #ebedf0;
+  --duo-contrib-1: #9be9a8;
+  --duo-contrib-2: #40c463;
+  --duo-contrib-3: #30a14e;
+  --duo-contrib-4: #216e39;
   --accent: #0969da;
   --accent-emphasis: #0550ae;
   --accent-subtle: #ddf4ff;
@@ -81,6 +98,20 @@
   --fg: #e6edf3;
   --fg-muted: #8b949e;
   --fg-subtle: #6e7681;
+
+  /* Dark-mode Duolingo tokens: aliases to the dark surfaces plus GitHub's
+     dark-theme contribution greens (brighter than the light-theme ramp). */
+  --duo-bg: #0d1117;
+  --duo-surface: #161b22;
+  --duo-inset: #010409;
+  --duo-border: #30363d;
+  --duo-fg: #e6edf3;
+  --duo-muted: #8b949e;
+  --duo-contrib-0: #161b22;
+  --duo-contrib-1: #0e4429;
+  --duo-contrib-2: #006d32;
+  --duo-contrib-3: #26a641;
+  --duo-contrib-4: #39d353;
   --accent: #2f81f7;
   --accent-emphasis: #1f6feb;
   --accent-subtle: rgba(56, 139, 253, 0.15);
