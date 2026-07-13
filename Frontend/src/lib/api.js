@@ -2,9 +2,12 @@
  * Thin fetch client for the GitRank backend.
  *
  * Base URL resolution (evaluated once on module load):
- *   1. ?api=<url> query param   → localStorage-persisted, so it survives navigation
- *   2. VITE_API_BASE env var    → set at build time (GitHub Pages)
- *   3. http://localhost:3000    → dev default
+ *   1. ?api=<url> query param              → localStorage-persisted, so it survives navigation
+ *   2. VITE_API_URL / VITE_API_BASE env    → set at build time (GitHub Pages)
+ *   3. http://localhost:3000               → dev default
+ *
+ * Prefer `VITE_API_URL` in new .env files; `VITE_API_BASE` is honoured for
+ * backwards compatibility with earlier deployments.
  *
  * Every non-2xx response is translated into a typed {@link ApiError} whose
  * `code`/`message`/`details` come from the backend's uniform error shape,
@@ -52,7 +55,7 @@ function resolveBase() {
   } catch {
     /* SSR-safe */
   }
-  const fromEnv = import.meta.env?.VITE_API_BASE;
+  const fromEnv = import.meta.env?.VITE_API_URL ?? import.meta.env?.VITE_API_BASE;
   return (fromEnv || DEFAULT_BASE).replace(/\/$/, '');
 }
 
@@ -174,10 +177,11 @@ export const getCohort = (slug) => request(`/cohorts/${encodeURIComponent(slug)}
 
 /**
  * GET /cohorts/:slug/leaderboard
+ * Default sort is `xp` — matches the backend's DEFAULT_LEADERBOARD_SORT.
  * @param {string} slug
- * @param {'commits'|'contributions'|'streak'|'stars'} [sort='commits']
+ * @param {'xp'|'commits'|'contributions'|'streak'|'stars'} [sort='xp']
  */
-export const getLeaderboard = (slug, sort = 'commits') =>
+export const getLeaderboard = (slug, sort = 'xp') =>
   request(`/cohorts/${encodeURIComponent(slug)}/leaderboard?sort=${encodeURIComponent(sort)}`);
 
 /** GET /cohorts/:slug/titles */

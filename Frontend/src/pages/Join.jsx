@@ -56,8 +56,14 @@ export default function Join() {
     if (initial) setForm((f) => ({ ...f, cohortSlug: initial.slug }));
   }, [activeCohorts, params, form.cohortSlug]);
 
-  const errors = validate(form);
-  const canSubmit = !submitting && form.cohortSlug && !errors.githubUsername && !errors.zid && !errors.programRepo;
+  const zidRequired = form.cohortSlug && form.cohortSlug !== 'global';
+  const errors = validate(form, { zidRequired });
+  const canSubmit =
+    !submitting &&
+    form.cohortSlug &&
+    !errors.githubUsername &&
+    !errors.zid &&
+    !errors.programRepo;
 
   const onChange = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const onBlur = (k) => setTouched((t) => ({ ...t, [k]: true }));
@@ -72,10 +78,13 @@ export default function Join() {
 
     const body = {
       githubUsername: form.githubUsername.trim(),
-      zid: form.zid.trim().toLowerCase(),
     };
+    // For program cohorts we always send zid. For global we only send it if the
+    // user actually filled it in (they can join as a non-UNSW member).
+    const trimmedZid = form.zid.trim().toLowerCase();
+    if (trimmedZid) body.zid = trimmedZid;
     if (form.displayName.trim()) body.displayName = form.displayName.trim();
-    if (form.programRepo.trim())  body.programRepo = form.programRepo.trim();
+    if (form.programRepo.trim()) body.programRepo = form.programRepo.trim();
 
     try {
       const res = await joinCohort(form.cohortSlug, body);
@@ -169,7 +178,10 @@ export default function Join() {
         </div>
 
         <div className={`field mono ${touched.zid && errors.zid ? 'invalid' : ''}`}>
-          <label htmlFor="zid">zID</label>
+          <label htmlFor="zid">
+            zID{' '}
+            {!zidRequired && <span className="muted">(optional for global — UNSW student? add your zID)</span>}
+          </label>
           <input
             id="zid"
             type="text"
@@ -177,9 +189,13 @@ export default function Join() {
             onChange={(e) => onChange('zid', e.target.value)}
             onBlur={() => onBlur('zid')}
             placeholder="z1234567"
-            required
+            required={zidRequired}
           />
-          <span className="hint">Format: <code>z</code> + seven digits.</span>
+          <span className="hint">
+            {zidRequired
+              ? <>Format: <code>z</code> + seven digits.</>
+              : <>Optional on <code>global</code>. If you add it later on a program cohort we'll link the accounts.</>}
+          </span>
           {touched.zid && errors.zid && (
             <span className="field-error">{errors.zid}</span>
           )}
@@ -232,13 +248,16 @@ export default function Join() {
  * Validation + error mapping
  * -------------------------------------------------------------------------- */
 
-function validate(form) {
+function validate(form, { zidRequired = true } = {}) {
   const out = {};
   if (form.githubUsername && !USERNAME_RE.test(form.githubUsername.trim())) {
     out.githubUsername = "That doesn't look like a valid GitHub username.";
   }
-  if (form.zid && !ZID_RE.test(form.zid.trim().toLowerCase())) {
+  const trimmedZid = form.zid.trim().toLowerCase();
+  if (trimmedZid && !ZID_RE.test(trimmedZid)) {
     out.zid = 'zID must be a "z" followed by exactly 7 digits.';
+  } else if (!trimmedZid && zidRequired) {
+    out.zid = 'zID is required for program cohorts.';
   }
   if (form.programRepo && !REPO_RE.test(form.programRepo.trim())) {
     out.programRepo = 'Use the "owner/name" format.';

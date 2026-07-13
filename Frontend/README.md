@@ -1,9 +1,10 @@
 # GitRank — frontend
 
-A tiny React SPA for the GitRank backend. It's a public, read-only dashboard
-that looks and feels like GitHub itself (Primer tokens, coral tab markers,
-contribution-graph greens used as data ink) and ships as a static bundle to
-GitHub Pages.
+A React + Vite + Tailwind SPA for the GitRank backend. Reads a public JSON API
+(no user auth) and layers a Duolingo-style gamified UI over GitHub's dark
+developer palette — XP rings, chunky level badges, a streak flame that grows
+at milestones, language "skill" circles, a 52-week contribution heatmap,
+rank-movement deltas, and a confetti burst on level-up.
 
 > _Screenshot placeholder — swap in `docs/screenshot.png` once the site is live._
 
@@ -13,11 +14,20 @@ GitHub Pages.
   and a "Global top 5" podium card.
 - **Cohort** — header + repo-style tab nav → **Leaderboard**, **Titles**,
   **Analytics**. Sort is a URL param, so `?sort=stars` is shareable.
-- **Profile `/u/:username`** — GitHub-style two-column layout with per-cohort
-  stat grids, an aggregate language bar, held titles (lapsed ones dimmed +
-  struck), and badges.
-- **Join** — the public self-serve form, with per-status error messaging
-  (400/403/404/409/422/network) and client-side zID validation.
+- **Leaderboard** — default sort is `xp`. Chunky sort chips, a spring-animated
+  podium for the top 3, level rings around every avatar, per-row rank-delta
+  badges (▲2 / ▼1 / —), and animated count-ups on the primary stat.
+- **Profile `/u/:username`** — big avatar wrapped in an XP ring showing level
+  progress; a streak flame that lights up at 7/30/100-day milestones; a
+  52-week contribution heatmap from the latest snapshot's calendar;
+  Duolingo-style circular skill icons for each top language; the level-up
+  toast (`🎉 LEVEL 12!`) plus confetti fires once when the cached level in
+  `localStorage` is beaten.
+- **Join** — the public self-serve form. `zid` is **required for program
+  cohorts** and **optional for the singleton `global` cohort** (a hint reads
+  "UNSW student? add your zID"). If added later on a program cohort, the
+  backend links the identities. Per-status error messaging
+  (400/403/404/409/422/network) covers the join surface.
 
 Every data view has all four states: loading skeleton, error (with retry),
 empty blankslate, and populated.
@@ -46,7 +56,8 @@ npm run preview              # local static server
 | --------------------- | -------------------- | ------------------------------------------- |
 | `?api=<url>` in URL   | everything           | Point at a different backend for one QA run |
 | `localStorage`        | env / default        | The `?api=` override is persisted           |
-| `VITE_API_BASE` env   | localhost default    | Set at build time (Pages workflow uses it)  |
+| `VITE_API_URL` env    | localhost default    | Preferred build-time backend URL            |
+| `VITE_API_BASE` env   | localhost default    | Backwards-compatible alias for `VITE_API_URL` |
 | `http://localhost:3000` | —                  | Fallback                                    |
 
 Example — point a running dev build at a staging backend without rebuilding:
@@ -120,11 +131,19 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Dependencies
 
-We hold the runtime dependency list to five packages:
+Runtime:
 
-- `react`, `react-dom`
-- `react-router-dom`
-- `vite`, `@vitejs/plugin-react` (dev-only)
+- `react`, `react-dom`, `react-router-dom`
+- `framer-motion` — springs + stagger for the Duolingo layer
+- `canvas-confetti` — one-off level-up burst
 
-No UI framework, no chart library, no icon package — Octicons are inlined in
-`src/components/Icons.jsx`. This keeps the built bundle around 65 kB gzipped.
+Dev / build:
+
+- `vite`, `@vitejs/plugin-react`
+- `tailwindcss`, `postcss`, `autoprefixer` — Tailwind is scoped to the
+  `duo/*` components; the existing GitHub-Primer stylesheet at
+  `src/styles.css` remains the base coat.
+
+Octicons are inlined in `src/components/Icons.jsx`. Every animated component
+respects `prefers-reduced-motion` (confetti, springs, count-ups all disable
+themselves) via [`src/hooks/useReducedMotion.js`](src/hooks/useReducedMotion.js).

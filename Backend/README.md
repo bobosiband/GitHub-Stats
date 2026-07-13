@@ -74,7 +74,7 @@ exits with a readable message if anything is missing or malformed.
 | `DATABASE_URL` | yes      | —             | Postgres connection string.                                         |
 | `GITHUB_TOKEN` | yes      | —             | GitHub PAT for the sync job. Only needs **public** read scope.      |
 | `ADMIN_TOKEN`  | yes      | —             | Static bearer token guarding `/admin/*`.                            |
-| `SYNC_CRON`    | no       | `*/5 * * * *` | Cron for the scheduled sync. The budget guard below stretches this automatically if needed. |
+| `SYNC_CRON`    | no       | `*/30 * * * *` | Cron for the scheduled sync (every 30 minutes). The budget guard below stretches this automatically if needed. |
 | `GITHUB_POINTS_BUDGET` | no | `4000`     | Safe hourly GraphQL points; runner skips ticks so estimated spend stays under this. |
 | `GITHUB_MIN_REMAINING` | no | `500`      | If GitHub reports remaining budget below this at run start, the tick is skipped. |
 | `PORT`         | no       | `3000`        | HTTP port.                                                          |
@@ -97,6 +97,7 @@ exits with a readable message if anything is missing or malformed.
 | `npm run db:migrate` | `prisma migrate dev`.                            |
 | `npm run db:seed`    | Seed the demo cohort.                            |
 | `npm run db:reset`   | Drop + re-create + re-seed the dev DB.           |
+| `npm run db:backfill-xp` | Recompute `xp` on every existing StatSnapshot (idempotent — one-off after adopting the XP column). |
 | `npm run docs:gen`   | Regenerate `openapi.json` from the spec source.  |
 
 ## API
@@ -119,7 +120,7 @@ it with `npm run docs:gen`.
 | `GET /openapi.json`                  | —     | Raw OpenAPI 3.0 spec.                                          |
 | `GET /cohorts`                       | —     | List cohorts with member counts.                              |
 | `GET /cohorts/:slug`                 | —     | Cohort detail + member count.                                 |
-| `GET /cohorts/:slug/leaderboard`     | —     | Ranked members. `?sort=commits\|contributions\|streak\|stars`.|
+| `GET /cohorts/:slug/leaderboard`     | —     | Ranked members. `?sort=xp\|commits\|contributions\|streak\|stars` (default `xp`). Entries carry `rankDelta` vs the previous sync. |
 | `GET /cohorts/:slug/titles`          | —     | All titles with current holders / badge earners.              |
 | `GET /members/:username`             | —     | Profile: latest stats per cohort, titles (incl. past), badges.|
 | `GET /members/:username/history?cohort=…&days=…` | — | Slim time-series (per-UTC-day, oldest-first) for progress charts. |
@@ -136,17 +137,32 @@ it with `npm run docs:gen`.
 
 ### Join flow — `POST /cohorts/:slug/join`
 
-Body: strictly `{ githubUsername, zid }`. **Any other field** — including the
+Body: strictly `{ githubUsername, zid? }`. **Any other field** — including the
 previously-supported `displayName` and `programRepo` — is rejected with **400**
 `VALIDATION_ERROR` and a message like
 `unexpected field "programRepo" — join only needs githubUsername and zid`.
 
-- `zid` must match `z` + 7 digits → otherwise **400**.
+**`zid` semantics vary by cohort:**
+
+- **PROGRAM cohorts** (any slug ≠ `global`): `zid` is **required** and must match
+  `z` + 7 digits → otherwise **400**.
+- **GLOBAL cohort** (slug `global`): `zid` is **optional**. Omit it (or send `""`)
+  to join as a non-UNSW member. The `Member.zid` column is nullable and stores
+  `NULL` in that case — Postgres unique indexes treat NULLs as distinct so any
+  number of members can have `zid = NULL` without collision.
+
+**Identity rules (apply on top of the cohort semantics above):**
+
 - Unknown cohort → **404**; inactive/ended cohort → **403**.
-- The `(zid, githubUsername)` pair is the identity boundary:
-  - duplicate zid or username belonging to a **different** identity → **409** (no silent re-linking);
-  - the **same** `(zid, username)` returning to join a new cohort → the existing `Member`
-    row is reused, a new `Membership` is added, and old titles are preserved.
+- Duplicate zid or username belonging to a **different** identity → **409** (no
+  silent re-linking, ever).
+- The **same** `(zid, username)` returning to join a new cohort → the existing
+  `Member` row is reused, a new `Membership` is added, and old titles are preserved.
+- **zid claim flow.** A member who joined `global` without a zid can later add
+  one by joining a PROGRAM cohort with the same GitHub username plus a fresh
+  zid — provided that zid isn't already linked to a different member. The
+  existing `Member` row is upgraded in place; a new row is not created.
+- A member who already has a zid, joining again with a *different* zid → **409**.
 - New members are verified against the GitHub API; a non-existent user → **422**.
 - `displayName` and `avatarUrl` auto-populate from the verified GitHub profile
   (falling back to the login when the profile has no `name`), and they refresh
@@ -172,11 +188,11 @@ repo simply can't win that title.
 
 ## Real-time updates
 
-GitHub is polled on a **budget-guarded fast cadence** and browsers get pushed
+GitHub is polled on a **budget-guarded 30-minute cadence** and browsers get pushed
 via SSE within milliseconds of each sync completing.
 
-- **Fast cron.** `SYNC_CRON` defaults to `*/5 * * * *`. Every tick the runner
-  (`src/jobs/syncJob.js`) counts active-cohort members and calls
+- **30-minute cron.** `SYNC_CRON` defaults to `*/30 * * * *`. Every tick the
+  runner (`src/jobs/syncJob.js`) counts active-cohort members and calls
   `describeCadence(memberCount, GITHUB_POINTS_BUDGET, SYNC_CRON)` from
   [`src/lib/budget.js`](src/lib/budget.js). If the raw cadence would blow the
   point budget (5 GraphQL points per member × runs/hr), the runner skips
@@ -184,6 +200,24 @@ via SSE within milliseconds of each sync completing.
   warning. A **live** guard also queries GitHub's `rateLimit { remaining }` and
   skips the tick with `{ skipped: true, reason: 'rate_limit' }` if remaining
   dips below `GITHUB_MIN_REMAINING`.
+- **Render sleep — important.** On Render's **free tier the web service sleeps
+  when idle**, so an in-process node-cron tick can't fire while asleep. The
+  external GitHub Actions workflow (`.github/workflows/sync.yml`, same
+  `*/30 * * * *` schedule) both wakes the service and triggers the run by
+  POSTing `/admin/sync-all`. GitHub Actions cron is best-effort and may fire
+  several minutes late during heavy load — that's the price of a $0 tier. On
+  always-on hosts (Railway hobby, etc.) the in-process node-cron carries the
+  load and the Actions workflow becomes a redundant backstop. The runner's
+  in-process lock guarantees the two triggers can't double-sync
+  (`{ skipped: true, reason: 'in_progress' }` on overlap).
+- **API budget math.** For N members ×  ~2 cohorts (a program cohort + global) ×
+  48 runs/day at ~5 GraphQL points per fetch = **480 · N points/day**. Against
+  GitHub's 5,000 points/**hour** = 120,000/day GraphQL budget, that leaves
+  comfortable headroom up to ~200 active members. Beyond that, either raise
+  `SYNC_CRON` (e.g. hourly), lower `GITHUB_POINTS_BUDGET`, or crank the
+  per-member politeness delay via `delayMs` when instantiating the runner
+  (the estimated-budget guard in [`src/lib/budget.js`](src/lib/budget.js) also
+  stretches the cadence automatically as `activeMemberCount` grows).
 - **Push, don't poll.** `GET /events` is a `text/event-stream` connection. On
   every completed sync the runner broadcasts `sync.completed`, plus one
   `titles.changed` per cohort whose evaluation moved any award. Cohort admin
@@ -196,9 +230,66 @@ via SSE within milliseconds of each sync completing.
   set an `ETag` derived from the cohort's latest snapshot `capturedAt` +
   membership count. A conditional GET with a matching `If-None-Match` returns
   **304 Not Modified** in a few ms without touching JSON.
-- **External cron caveat.** GitHub Actions cron (`.github/workflows/sync.yml`)
-  is unreliable at 5-minute granularity and is provided as a free-tier
-  fallback only. On always-on hosts prefer the in-process node-cron.
+
+## XP + Levels
+
+Every StatSnapshot carries a denormalised `xp` column, computed deterministically
+from the same stats the rest of the app already tracks. It's the primary
+progression metric — the leaderboard sorts by `xp` by default, the profile shows
+per-cohort level + progress, and three level badges (`level_5`, `level_10`,
+`level_20`) fall out of the same title engine as every other badge.
+
+### Formula ([`src/services/xp.js`](src/services/xp.js))
+
+```
+activityXP  = 10·totalCommits + 30·totalPRs + 40·reviewsGiven + 15·issuesOpened
+streakMult  = 1 + min(0.5, 0.01 · currentStreak)          // capped at 1.5×
+socialXP    = 25·√totalStars + 5·√followers                 // diminishing returns
+collabXP    = 20·contributedRepoCount + 8·mergedPRs
+languageXP  = Σ over topLanguages: min(300, 30·log2(1 + bytes/1000))
+              + 50·max(0, languageCount − topLanguages.length)   // polyglot bonus
+XP          = round(activityXP · streakMult + socialXP + collabXP + languageXP)
+```
+
+Rationale: linear rewards for effort you actually control (commits, PRs,
+reviews — reviews weighted highest, Duolingo-style "hard exercises pay more");
+sqrt/log curves on stars, followers, and repo scale so nothing can be farmed;
+a streak multiplier that rewards consistency without letting a single 100-day
+streak dwarf actual work; per-language XP capped at 300 apiece so one giant
+repo in one language is worth exactly one maxed-out "skill".
+
+**On the global cohort (rolling 365-day window) `xp` can *decrease*** as older
+work falls out of the window. That is intentional — the leaderboard stays
+contestable — but worth calling out.
+
+### Level curve
+
+```
+xpForLevel(L)  = round(100 · L^1.7)          // cumulative XP to REACH level L
+levelForXp(xp) = floor((xp / 100)^(1/1.7))
+```
+
+Sanity anchors:
+
+| Level | XP required |
+| ----- | ----------- |
+| 1     | 100         |
+| 2     | 325         |
+| 5     | ~1,540      |
+| 10    | ~5,012      |
+| 20    | ~16,300     |
+| 50    | ~77,000     |
+
+### Backfill
+
+The `xp` column defaults to 0 for rows written before the migration. Run:
+
+```bash
+npm run db:backfill-xp
+```
+
+once after upgrading. It's idempotent and safe to re-run — bad rows are skipped
+with a log line, everything else is recomputed.
 
 ## Titles
 
@@ -208,7 +299,8 @@ Records (one holder per cohort, transfer on **strictly** greater — ties keep t
 `oldest_account`, `biggest_day`, `weekend_warrior` (min 20 contributions), `night_owl`.
 
 Badges (threshold, permanent): `first_push`, `century`, `streak_7`, `streak_30`,
-`first_merge`, `reviewer`, `five_languages`, `starred`.
+`first_merge`, `reviewer`, `five_languages`, `starred`, and the XP-based
+`level_5` / `level_10` / `level_20`.
 
 ### Adding a new title (≈5 lines, no engine changes)
 
@@ -328,9 +420,11 @@ Add two repo secrets under *Settings → Secrets and variables → Actions*:
 - `APP_URL` — e.g. `https://gitrank-backend.onrender.com`
 - `ADMIN_TOKEN` — same value the deploy uses
 
-`.github/workflows/sync.yml` fires on `schedule: '0 */3 * * *'` and on
+`.github/workflows/sync.yml` fires on `schedule: '*/30 * * * *'` and on
 `workflow_dispatch`; each run POSTs to `${APP_URL}/admin/sync-all` with the
-bearer token and fails on non-2xx. On free tiers it doubles as a wake-up ping.
+bearer token and fails on non-2xx. On free tiers it doubles as a wake-up ping;
+GitHub Actions cron is best-effort and can be delayed several minutes during
+platform load.
 
 ### Verifying a deploy
 

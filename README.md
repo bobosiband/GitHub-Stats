@@ -1,10 +1,17 @@
 # GitHub-Stats
 
-Monorepo for the GitRank project.
+Monorepo for **GitRank v2** — a public GitHub-activity leaderboard fused with
+Duolingo-style gamification (XP, levels, streak flame, level-up celebrations,
+rank-movement deltas).
 
-- [`Backend/`](./Backend) — Fastify + Prisma + Postgres API that syncs GitHub
-  stats, ranks members on program + global leaderboards, and awards titles.
-  See [`Backend/README.md`](./Backend/README.md) for the full docs, quick start,
-  API reference, and deployment guide.
+- [`Backend/`](./Backend) — Node 20 / Fastify 5 / Prisma / Postgres API. Syncs
+  member stats every 30 minutes, computes deterministic XP per snapshot, ranks
+  members on program + global leaderboards, and awards titles through a
+  declarative engine. See [`Backend/README.md`](./Backend/README.md).
+- [`Frontend/`](./Frontend) — React + Vite + Tailwind + framer-motion SPA that
+  reads the public JSON API. GitHub-dark palette with a Duolingo layer on top
+  (XP rings, chunky level badges, streak flame, language "skill" circles,
+  52-week contribution heatmap, rank-delta pills). See
+  [`Frontend/README.md`](./Frontend/README.md).
 
-Frontend and other services will live as sibling folders alongside `Backend/`.
+See [`CHANGES.md`](./CHANGES.md) for what shipped in v2.
