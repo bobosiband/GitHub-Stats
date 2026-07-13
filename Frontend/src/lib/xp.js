@@ -33,12 +33,21 @@ export function levelProgress(xp) {
   return Math.max(0, Math.min(1, p));
 }
 
-/** Prefer the backend's rolled-up progression if present, else compute locally. */
+/**
+ * Prefer the backend's rolled-up progression if present, else compute locally.
+ * Returns `null` for cohorts that have **no snapshot yet** — components should
+ * treat that as "not synced" and render an empty state, not silently coerce to
+ * XP=0/Level=0 (which is what the earlier `?? 0` fallback was hiding).
+ *
+ * `xp` legitimately being `0` on a real snapshot (brand-new member, all-zero
+ * stats) still returns a numeric progression.
+ */
 export function progressionFrom(cohortEntry) {
   const stats = cohortEntry?.stats;
   const p = cohortEntry?.progression;
   if (p && typeof p.xp === 'number') return p;
-  const xp = stats?.xp ?? 0;
+  if (!stats || typeof stats.xp !== 'number') return null;
+  const xp = stats.xp;
   const level = levelForXp(xp);
   const next = xpForLevel(level + 1);
   return {
@@ -47,4 +56,14 @@ export function progressionFrom(cohortEntry) {
     levelProgress: levelProgress(xp),
     xpToNextLevel: Math.max(0, next - xp),
   };
+}
+
+/**
+ * Per-language XP contribution — mirrors the backend's `computeXp` inner term.
+ * Shared so the language-skill rings scale correctly whether or not the API
+ * bundles the value on each topLanguages entry.
+ */
+export function perLanguageXp(bytes) {
+  if (typeof bytes !== 'number' || Number.isNaN(bytes) || bytes <= 0) return 0;
+  return Math.min(300, 30 * Math.log2(1 + bytes / 1000));
 }

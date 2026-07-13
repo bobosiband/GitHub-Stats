@@ -1,5 +1,5 @@
 import { NotFoundError } from '../lib/errors.js';
-import { xpSummary } from './xp.js';
+import { xpSummary, perLanguageXp, PER_LANGUAGE_XP_CAP } from './xp.js';
 import { buildRankDeltas } from './rankDeltas.js';
 
 /** Map leaderboard `sort` param → snapshot column. */
@@ -28,12 +28,21 @@ export function publicMember(member) {
  * Serialise a StatSnapshot for the API. Drops ids and (by default) the bulky
  * calendar. Pass `{ includeCalendar: true }` to include it — the profile route
  * needs it for the heatmap, the leaderboard row does not.
+ *
+ * Each `topLanguages` entry is annotated with an `xp` field — the per-language
+ * XP contribution capped at PER_LANGUAGE_XP_CAP. This is the single source of
+ * truth the language-skill rings in the frontend key off, so the ring fullness
+ * always matches the scoring rules (no client-side re-derivation).
  */
 export function serializeSnapshot(s, { includeCalendar = false } = {}) {
   if (!s) return null;
   const out = {
     capturedAt: s.capturedAt,
-    xp: s.xp ?? 0,
+    // The `xp` column is NOT NULL DEFAULT 0 (see migration), so this branch
+    // only fires for rows written before the column existed. Backfill is safe
+    // to re-run; the reason we don't silently coerce here is so the frontend
+    // can distinguish "no snapshot yet" (whole object null) from "xp=0".
+    xp: typeof s.xp === 'number' ? s.xp : 0,
     totalCommits: s.totalCommits,
     totalContributions: s.totalContributions,
     totalPRs: s.totalPRs,
@@ -45,7 +54,7 @@ export function serializeSnapshot(s, { includeCalendar = false } = {}) {
     repoCount: s.repoCount,
     contributedRepoCount: s.contributedRepoCount,
     languageCount: s.languageCount,
-    topLanguages: s.topLanguages,
+    topLanguages: annotateTopLanguages(s.topLanguages),
     longestStreak: s.longestStreak,
     currentStreak: s.currentStreak,
     maxCommitsInOneDay: s.maxCommitsInOneDay,
@@ -54,6 +63,20 @@ export function serializeSnapshot(s, { includeCalendar = false } = {}) {
   };
   if (includeCalendar) out.calendar = s.calendar ?? [];
   return out;
+}
+
+/** Attach `xp` + `xpCap` to each language so the UI can render the ring math directly. */
+function annotateTopLanguages(langs) {
+  if (!Array.isArray(langs)) return [];
+  return langs.map((lang) => {
+    const bytes = Number(lang?.bytes) || 0;
+    return {
+      name: lang?.name ?? '',
+      bytes,
+      xp: Math.round(perLanguageXp(bytes)),
+      xpCap: PER_LANGUAGE_XP_CAP,
+    };
+  });
 }
 
 export function serializeCohort(cohort, extra = {}) {
@@ -231,9 +254,12 @@ export async function buildMemberProfile(prisma, member) {
       orderBy: { capturedAt: 'desc' },
     });
     // Profile carries the calendar for the heatmap; xp/level/progress roll up
-    // for the ring around the avatar and the level badge.
+    // for the ring around the avatar and the level badge. `progression` is
+    // deliberately `null` when there is no snapshot yet — the frontend keys
+    // off that to show a "first sync pending" state instead of a fake Level 0.
     const stats = serializeSnapshot(snapshot, { includeCalendar: true });
-    const progression = xpSummary(snapshot?.xp ?? 0);
+    const progression =
+      snapshot && typeof snapshot.xp === 'number' ? xpSummary(snapshot.xp) : null;
     cohorts.push({
       cohort: serializeCohort(ms.cohort),
       role: ms.role,

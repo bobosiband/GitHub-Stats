@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { summariseCalendar } from '../src/services/streaks.js';
 import { ensureTitles, evaluateCohort } from '../src/services/titles/engine.js';
+import { computeXp } from '../src/services/xp.js';
 
 const prisma = new PrismaClient();
 
@@ -273,21 +274,27 @@ async function main() {
 
     const calendar = genCalendar(COHORT.startDate, NUM_DAYS, spec.calendarFn);
     const derived = summariseCalendar(calendar, TODAY);
+    // Build the shape computeXp expects (the sync path assembles the same fields
+    // from `UserStats`); seeding directly means we have to mirror it here.
+    const snapshotStats = {
+      ...spec.counts,
+      totalContributions: derived.totalContributions,
+      topLanguages: spec.topLanguages,
+      longestStreak: derived.longestStreak,
+      currentStreak: derived.currentStreak,
+      maxCommitsInOneDay: derived.maxCommitsInOneDay,
+      weekendCommitRatio: derived.weekendCommitRatio,
+      nightCommitRatio: spec.nightCommitRatio,
+    };
 
     await prisma.statSnapshot.create({
       data: {
         memberId: member.id,
         cohortId: cohort.id,
         capturedAt: TODAY,
-        ...spec.counts,
-        totalContributions: derived.totalContributions,
-        topLanguages: spec.topLanguages,
-        longestStreak: derived.longestStreak,
-        currentStreak: derived.currentStreak,
-        maxCommitsInOneDay: derived.maxCommitsInOneDay,
-        weekendCommitRatio: derived.weekendCommitRatio,
-        nightCommitRatio: spec.nightCommitRatio,
+        ...snapshotStats,
         calendar,
+        xp: computeXp(snapshotStats),
       },
     });
   }

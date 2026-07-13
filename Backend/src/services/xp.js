@@ -78,9 +78,7 @@ export function computeXp(stats) {
   // for — encourages breadth without paying for tiny sliver files.
   let languageXP = 0;
   for (const lang of topLanguages) {
-    const bytes = nn(lang?.bytes);
-    const raw = 30 * Math.log2(1 + bytes / 1000);
-    languageXP += Math.min(300, raw);
+    languageXP += perLanguageXp(lang?.bytes);
   }
   const polyglotBonus = 50 * Math.max(0, languages - topLanguages.length);
   languageXP += polyglotBonus;
@@ -88,6 +86,24 @@ export function computeXp(stats) {
   const total = activityXP * streakMult + socialXP + collabXP + languageXP;
   return Math.max(0, Math.round(total));
 }
+
+/**
+ * XP contribution from a single language's byte total. Same shape used inside
+ * `computeXp`; exported so serializers can annotate each `topLanguages` entry
+ * (and the frontend can render partial skill rings without duplicating the
+ * formula). Caps at 300 per language — one maxed "skill" in Duolingo terms.
+ *
+ * @param {number} bytes
+ * @returns {number}
+ */
+export function perLanguageXp(bytes) {
+  const b = nn(bytes);
+  if (b <= 0) return 0;
+  return Math.min(300, 30 * Math.log2(1 + b / 1000));
+}
+
+/** Cap per language. Exported so callers can drive UI (progress fraction, glow at cap). */
+export const PER_LANGUAGE_XP_CAP = 300;
 
 /**
  * Superlinear level curve — Duolingo levels feel tight at the start and
