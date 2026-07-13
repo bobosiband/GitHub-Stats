@@ -111,6 +111,12 @@ model StatSnapshot {
   weekendCommitRatio   Float
   nightCommitRatio     Float?
   calendar             Json
+  // Denormalised XP for this snapshot — computed at sync time from the other
+  // columns via `src/services/xp.js`. Kept as an indexed column so the
+  // leaderboard's default `sort=xp` is a single ORDER BY without a JS-side
+  // reduce. Existing rows before this migration default to 0 and are backfilled
+  // via `npm run db:backfill-xp`.
+  xp                   Int      @default(0)
 
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
   cohort Cohort @relation(fields: [cohortId], references: [id], onDelete: Cascade)
@@ -121,6 +127,9 @@ model StatSnapshot {
   // "capturedAt" DESC in `views.js` — the sort direction matters so the DB can
   // read the group's first row without an extra sort step.
   @@index([cohortId, memberId, capturedAt(sort: Desc)])
+  // Speeds up the default xp-sorted leaderboard (rank movement view also
+  // benefits — it fetches the previous snapshot set per member).
+  @@index([cohortId, xp(sort: Desc)])
 }
 
 model Title {

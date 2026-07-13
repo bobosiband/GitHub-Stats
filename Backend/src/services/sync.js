@@ -1,4 +1,5 @@
 import { NotFoundError } from '../lib/errors.js';
+import { computeXp } from './xp.js';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

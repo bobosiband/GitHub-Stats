@@ -281,4 +281,135 @@ describe('POST /cohorts/:slug/join', () => {
     const slugs = member.memberships.map((m) => m.cohort.slug).sort();
     expect(slugs).toEqual(['global', 'later-program']);
   });
+
+  describe('global cohort — zid is optional', () => {
+    it('accepts a global join without a zid and stores zid=NULL', async () => {
+      const res = await join('global', { githubUsername: 'nozid' });
+      expect(res.statusCode).toBe(201);
+      const stored = await prisma.member.findUnique({ where: { githubUsername: 'nozid' } });
+      expect(stored.zid).toBeNull();
+      expect(res.json().cohorts.map((c) => c.cohort.slug)).toEqual(['global']);
+    });
+
+    it('accepts a global join with an empty-string zid (treated as absent)', async () => {
+      const res = await join('global', { githubUsername: 'emptyzid', zid: '' });
+      expect(res.statusCode).toBe(201);
+      const stored = await prisma.member.findUnique({ where: { githubUsername: 'emptyzid' } });
+      expect(stored.zid).toBeNull();
+    });
+
+    it('allows multiple different members to join global without a zid', async () => {
+      const a = await join('global', { githubUsername: 'nozid-a' });
+      const b = await join('global', { githubUsername: 'nozid-b' });
+      expect(a.statusCode).toBe(201);
+      expect(b.statusCode).toBe(201);
+      const rows = await prisma.member.findMany({ where: { zid: null } });
+      expect(rows.map((r) => r.githubUsername).sort()).toEqual(['nozid-a', 'nozid-b']);
+    });
+
+    it('still validates a zid when one is provided', async () => {
+      const res = await join('global', { githubUsername: 'bad', zid: 'not-a-zid' });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('still enforces the returning-member zid conflict on global', async () => {
+      await makeMember({ githubUsername: 'gclash', zid: 'z9000101' });
+      const res = await join('global', { githubUsername: 'gclash', zid: 'z9000102' });
+      expect(res.statusCode).toBe(409);
+    });
+
+    it('a returning member with a zid can rejoin global WITHOUT supplying zid', async () => {
+      const first = await join('global', { githubUsername: 'zidholder', zid: 'z9000103' });
+      expect(first.statusCode).toBe(201);
+      // Second call omits zid — must not mutate the stored zid.
+      const second = await join('global', { githubUsername: 'zidholder' });
+      // Membership already exists, so this is a conflict — but the point is
+      // the stored row is untouched.
+      expect([201, 409]).toContain(second.statusCode);
+      const stored = await prisma.member.findUnique({ where: { githubUsername: 'zidholder' } });
+      expect(stored.zid).toBe('z9000103');
+    });
+  });
+
+  describe('program cohorts — zid still required', () => {
+    it('rejects a program join without a zid with 400', async () => {
+      await makeCohort({ slug: 'prog', isActive: true });
+      const res = await join('prog', { githubUsername: 'noziduser' });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.code).toBe('VALIDATION_ERROR');
+      // Nothing was created.
+      expect(await prisma.member.count()).toBe(0);
+    });
+
+    it('rejects a program join with empty-string zid with 400', async () => {
+      await makeCohort({ slug: 'prog', isActive: true });
+      const res = await join('prog', { githubUsername: 'emptier', zid: '' });
+      expect(res.statusCode).toBe(400);
+    });
+  });
+
+  describe('zid claim flow — global then program', () => {
+    it('claims a zid onto a previously zid-less member', async () => {
+      await makeCohort({ slug: 'devsoc-2025', isActive: true });
+
+      // First: user joins global without a zid.
+      const g = await join('global', { githubUsername: 'claimer' });
+      expect(g.statusCode).toBe(201);
+      const before = await prisma.member.findUnique({ where: { githubUsername: 'claimer' } });
+      expect(before.zid).toBeNull();
+
+      // Then: same user joins a program cohort with a zid.
+      const p = await join('devsoc-2025', {
+        githubUsername: 'claimer',
+        zid: 'z9000200',
+      });
+      expect(p.statusCode).toBe(201);
+
+      const after = await prisma.member.findUnique({ where: { githubUsername: 'claimer' } });
+      expect(after.id).toBe(before.id); // same member row
+      expect(after.zid).toBe('z9000200'); // now with a zid
+
+      // Only one member row exists.
+      expect(await prisma.member.count()).toBe(1);
+    });
+
+    it('refuses to claim a zid already linked to a different member', async () => {
+      await makeCohort({ slug: 'devsoc-2025', isActive: true });
+      await makeMember({ githubUsername: 'incumbent', zid: 'z9000201' });
+
+      await join('global', { githubUsername: 'wannabe' });
+      const p = await join('devsoc-2025', {
+        githubUsername: 'wannabe',
+        zid: 'z9000201',
+      });
+      expect(p.statusCode).toBe(409);
+
+      // The zid-less row is untouched.
+      const wannabe = await prisma.member.findUnique({ where: { githubUsername: 'wannabe' } });
+      expect(wannabe.zid).toBeNull();
+    });
+
+    it('refuses to overwrite an existing non-null zid with a different one', async () => {
+      await makeCohort({ slug: 'devsoc-2025', isActive: true });
+      await join('devsoc-2025', { githubUsername: 'locked', zid: 'z9000202' });
+
+      const conflict = await join('devsoc-2025', {
+        githubUsername: 'locked',
+        zid: 'z9000203',
+      });
+      expect(conflict.statusCode).toBe(409);
+      const stored = await prisma.member.findUnique({ where: { githubUsername: 'locked' } });
+      expect(stored.zid).toBe('z9000202');
+    });
+
+    it('after claiming, joining another cohort with the same zid still works', async () => {
+      await makeCohort({ slug: 'a', isActive: true });
+      await makeCohort({ slug: 'b', isActive: true });
+      await join('global', { githubUsername: 'multi' });
+      const r1 = await join('a', { githubUsername: 'multi', zid: 'z9000204' });
+      expect(r1.statusCode).toBe(201);
+      const r2 = await join('b', { githubUsername: 'multi', zid: 'z9000204' });
+      expect(r2.statusCode).toBe(201);
+    });
+  });
 });
