@@ -25,6 +25,7 @@ import {
 import XpRing from '../components/duo/XpRing.jsx';
 import RankDeltaBadge from '../components/duo/RankDeltaBadge.jsx';
 import CountUp from '../components/duo/CountUp.jsx';
+import XpProgressBar from '../components/duo/XpProgressBar.jsx';
 import { SkeletonList } from '../components/duo/SkeletonRow.jsx';
 import { progressionFrom } from '../lib/xp.js';
 import { useReducedMotion } from '../hooks/useReducedMotion.js';
@@ -141,7 +142,7 @@ function PodiumCard({ entry, tier, reduced, sort }) {
   const stats = entry.stats;
   const prog = progressionFrom({ stats });
   const activeStatKey = SORT_META[sort].statKey;
-  const statValue = stats?.[activeStatKey] ?? 0;
+  const statValue = stats?.[activeStatKey] ?? null;
   const tierBg = ['from-duo-gold/30', 'from-white/10', 'from-[#b08d57]/30'][tier];
 
   return (
@@ -156,8 +157,8 @@ function PodiumCard({ entry, tier, reduced, sort }) {
       </div>
       <XpRing
         size={110}
-        progress={prog.levelProgress}
-        level={prog.level}
+        progress={prog?.levelProgress ?? 0}
+        level={prog?.level ?? 0}
         badgeSize={30}
       >
         <img
@@ -177,9 +178,16 @@ function PodiumCard({ entry, tier, reduced, sort }) {
           @{entry.member.githubUsername}
         </div>
       </div>
-      <div className="flex items-center gap-2 font-mono text-ghfg">
-        <CountUp value={statValue} className="text-lg font-black text-duo-green" />
-        <span className="text-xs uppercase text-ghmuted">{SORT_META[sort].label}</span>
+      {statValue == null ? (
+        <span className="text-xs italic text-ghmuted">first sync pending</span>
+      ) : (
+        <div className="flex items-center gap-2 font-mono text-ghfg">
+          <CountUp value={statValue} className="text-lg font-black text-duo-green" />
+          <span className="text-xs uppercase text-ghmuted">{SORT_META[sort].label}</span>
+        </div>
+      )}
+      <div className="w-full">
+        <XpProgressBar progression={prog} compact />
       </div>
       <RankDeltaBadge delta={entry.rankDelta} />
     </motion.div>
@@ -190,7 +198,7 @@ function LeaderboardRow({ entry, index, reduced, sort }) {
   const stats = entry.stats;
   const prog = progressionFrom({ stats });
   const activeStatKey = SORT_META[sort].statKey;
-  const statValue = stats?.[activeStatKey] ?? 0;
+  const statValue = stats?.[activeStatKey] ?? null;
 
   return (
     <motion.div
@@ -203,7 +211,13 @@ function LeaderboardRow({ entry, index, reduced, sort }) {
       <div className="w-8 text-center font-mono text-ghmuted font-bold">{entry.rank}</div>
       <RankDeltaBadge delta={entry.rankDelta} />
       <div className="shrink-0">
-        <XpRing size={52} progress={prog.levelProgress} level={prog.level} badgeSize={20} strokeWidth={4}>
+        <XpRing
+          size={52}
+          progress={prog?.levelProgress ?? 0}
+          level={prog?.level ?? 0}
+          badgeSize={20}
+          strokeWidth={4}
+        >
           <img
             src={entry.member.avatarUrl}
             alt=""
@@ -224,12 +238,18 @@ function LeaderboardRow({ entry, index, reduced, sort }) {
           <div className="text-xs text-ghmuted italic">first sync pending</div>
         )}
       </div>
-      <div className="text-right font-mono">
-        <CountUp
-          value={statValue}
-          className="block text-lg font-black text-duo-green leading-none"
-        />
-        <div className="text-[10px] uppercase text-ghmuted">{SORT_META[sort].label}</div>
+      <div className="text-right font-mono min-w-[80px]">
+        {statValue == null ? (
+          <span className="text-xs italic text-ghmuted">—</span>
+        ) : (
+          <>
+            <CountUp
+              value={statValue}
+              className="block text-lg font-black text-duo-green leading-none"
+            />
+            <div className="text-[10px] uppercase text-ghmuted">{SORT_META[sort].label}</div>
+          </>
+        )}
       </div>
     </motion.div>
   );

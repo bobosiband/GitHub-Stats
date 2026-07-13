@@ -2,11 +2,16 @@ import { motion } from 'framer-motion';
 import { useReducedMotion } from '../../hooks/useReducedMotion.js';
 
 /**
- * Duolingo-style streak flame. Grows and re-colours at 7 / 30 / 100 day
- * milestones; a broken (0-day) streak renders as a grey "lost" flame so the
- * absence is visible rather than hidden.
+ * Duolingo-style streak flame.
+ *
+ * `days` = the member's current streak (0 = lost).
+ * `longest` (optional) = the member's longest-ever streak — surfaced in the
+ * "No active streak" copy so the widget doesn't just say `0`.
+ *
+ * Colouring escalates at 7 / 30 / 100-day milestones. A lost streak renders as
+ * a grey de-saturated flame instead of vanishing so its absence is visible.
  */
-export default function StreakFlame({ days = 0, size = 44, showLabel = true }) {
+export default function StreakFlame({ days = 0, longest = 0, size = 44, showLabel = true }) {
   const reduced = useReducedMotion();
   const lost = days <= 0;
   const tier = days >= 100 ? 3 : days >= 30 ? 2 : days >= 7 ? 1 : 0;
@@ -16,15 +21,16 @@ export default function StreakFlame({ days = 0, size = 44, showLabel = true }) {
   const [inner, outer] = lost
     ? ['#4a4f57', '#2a2d33']
     : tier >= 3
-    ? ['#ffef88', '#ff4b4b'] // legendary 100+ — white-hot core
+    ? ['#ffef88', '#ff4b4b']
     : tier >= 2
-    ? ['#ffc800', '#ff4b4b'] // 30+ — gold + red
-    : tier >= 1
-    ? ['#ffb800', '#ff9600'] // 7+ — orange
+    ? ['#ffc800', '#ff4b4b']
     : ['#ffb800', '#ff9600'];
 
   return (
-    <div className="inline-flex items-center gap-2" aria-label={`${days}-day streak`}>
+    <div
+      className="inline-flex items-center gap-3 rounded-xl border-2 border-ghborder bg-ghinset px-3 py-2"
+      aria-label={lost ? `No active streak, longest ${longest} days` : `${days}-day streak`}
+    >
       <motion.div
         animate={reduced || lost ? {} : { scale: [scale, scale * 1.06, scale] }}
         transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
@@ -55,12 +61,29 @@ export default function StreakFlame({ days = 0, size = 44, showLabel = true }) {
       </motion.div>
       {showLabel && (
         <div className="leading-tight">
-          <div className={`font-black text-lg ${lost ? 'text-ghmuted' : 'text-duo-orange'}`}>
-            {days}
-          </div>
-          <div className="text-xs text-ghmuted uppercase tracking-wide">
-            {lost ? 'streak lost' : 'day streak'}
-          </div>
+          {lost ? (
+            <>
+              <div className="font-bold text-ghfg text-sm">No active streak</div>
+              <div className="text-[11px] text-ghmuted">
+                {longest > 0 ? (
+                  <>
+                    Longest:{' '}
+                    <span className="font-mono font-bold text-ghfg">{longest}</span>{' '}
+                    day{longest === 1 ? '' : 's'}
+                  </>
+                ) : (
+                  'Ship something today to start one.'
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="font-black text-lg text-duo-orange leading-none">{days}</div>
+              <div className="text-[11px] text-ghmuted uppercase tracking-wide">
+                day streak
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

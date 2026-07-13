@@ -35,6 +35,7 @@ import LanguageSkills from '../components/duo/LanguageSkills.jsx';
 import ContributionHeatmap from '../components/duo/ContributionHeatmap.jsx';
 import CountUp from '../components/duo/CountUp.jsx';
 import LevelUpToast from '../components/duo/LevelUpToast.jsx';
+import XpProgressBar from '../components/duo/XpProgressBar.jsx';
 import { SkeletonList } from '../components/duo/SkeletonRow.jsx';
 import { progressionFrom } from '../lib/xp.js';
 
@@ -78,15 +79,23 @@ export default function Profile() {
 
   const { member, cohorts, titles, badges } = data;
   const globalCohort = cohorts.find((c) => c.cohort.slug === GLOBAL_SLUG) ?? cohorts[0] ?? null;
+  // `progressionFrom` returns null when the primary cohort has no snapshot yet;
+  // the sidebar renders an "unsynced" empty state in that case rather than
+  // pretending XP = 0 / Level = 0 (the class of bug behind the screenshot).
   const primaryProg = progressionFrom(globalCohort ?? {});
-  const currentStreak = globalCohort?.stats?.currentStreak ?? 0;
+  const primaryStats = globalCohort?.stats ?? null;
+  const currentStreak = primaryStats?.currentStreak ?? 0;
+  const longestStreak = primaryStats?.longestStreak ?? 0;
   const followers = latestStat(cohorts, 'followers');
-  const totalXp = cohorts.reduce((acc, c) => acc + (c.stats?.xp ?? 0), 0);
+  const syncedCohorts = cohorts.filter((c) => c.stats);
+  const totalXp = syncedCohorts.reduce((acc, c) => acc + c.stats.xp, 0);
   const badgeAwards = badges.length ? badges : titles.filter((t) => t.kind === 'BADGE');
 
   return (
     <div className="container">
-      <LevelUpToast username={member.githubUsername} level={primaryProg.level} />
+      {primaryProg && (
+        <LevelUpToast username={member.githubUsername} level={primaryProg.level} />
+      )}
 
       <div className="grid gap-8 lg:grid-cols-[300px_1fr] items-start">
         <aside className="lg:sticky lg:top-20 space-y-4">
@@ -94,8 +103,8 @@ export default function Profile() {
             <XpRing
               size={220}
               strokeWidth={12}
-              progress={primaryProg.levelProgress}
-              level={primaryProg.level}
+              progress={primaryProg?.levelProgress ?? 0}
+              level={primaryProg?.level ?? 0}
               badgeSize={54}
             >
               <Avatar
@@ -110,11 +119,28 @@ export default function Profile() {
               </h1>
               <div className="text-ghmuted font-mono">@{member.githubUsername}</div>
             </div>
-            <div className="w-full grid grid-cols-2 gap-2 text-center">
-              <StatChip label="Total XP" value={<CountUp value={totalXp} className="text-duo-green" />} />
-              <StatChip label="Level" value={<span className="text-duo-green">{primaryProg.level}</span>} />
-            </div>
-            <StreakFlame days={currentStreak} />
+            {primaryProg ? (
+              <>
+                <div className="w-full grid grid-cols-2 gap-2 text-center">
+                  <StatChip
+                    label="Total XP"
+                    value={<CountUp value={totalXp} className="text-duo-green" />}
+                  />
+                  <StatChip
+                    label="Level"
+                    value={<span className="text-duo-green">{primaryProg.level}</span>}
+                  />
+                </div>
+                <div className="w-full">
+                  <XpProgressBar progression={primaryProg} compact />
+                </div>
+              </>
+            ) : (
+              <div className="w-full rounded-xl border-2 border-dashed border-ghborder bg-ghinset px-3 py-2 text-xs text-ghmuted text-center italic">
+                First sync pending
+              </div>
+            )}
+            <StreakFlame days={currentStreak} longest={longestStreak} />
           </div>
 
           <dl className="rounded-2xl border-2 border-ghborder bg-ghsurface p-4 text-sm text-ghfg grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
@@ -197,35 +223,14 @@ function CohortBlock({ entry }) {
       <div className="p-4 space-y-5">
         {stats ? (
           <>
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-3 rounded-xl bg-ghinset border-2 border-ghborder px-4 py-2">
-                <div className="text-3xl font-black text-duo-green font-mono leading-none">
-                  <CountUp value={prog.xp} />
-                </div>
-                <div className="text-xs uppercase tracking-wide text-ghmuted">XP</div>
-              </div>
-              <div className="flex items-center gap-2 rounded-xl bg-ghinset border-2 border-ghborder px-4 py-2">
-                <div className="rounded-full bg-duo-green text-black font-black w-8 h-8 grid place-items-center">
-                  {prog.level}
-                </div>
-                <div className="text-xs text-ghmuted">
-                  {prog.xpToNextLevel > 0 ? (
-                    <>
-                      <span className="font-mono text-ghfg font-bold">
-                        {prog.xpToNextLevel.toLocaleString()}
-                      </span>{' '}
-                      XP to level {prog.level + 1}
-                    </>
-                  ) : (
-                    'max level reached'
-                  )}
-                </div>
-              </div>
-            </div>
+            <XpProgressBar progression={prog} />
 
             {stats.calendar && (
               <div className="rounded-xl border border-ghborder bg-ghinset p-4">
-                <ContributionHeatmap calendar={stats.calendar} />
+                <ContributionHeatmap
+                  calendar={stats.calendar}
+                  capturedAt={stats.capturedAt}
+                />
               </div>
             )}
 
