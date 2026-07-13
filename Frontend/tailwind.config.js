@@ -10,23 +10,24 @@ export default {
   theme: {
     extend: {
       colors: {
-        // GitHub dark palette anchors — matches CSS custom properties in
-        // styles.css so we can mix the existing GitHub-Primer components with
-        // Tailwind utilities without a colour clash.
-        ghbg: '#0d1117',
-        ghsurface: '#161b22',
-        ghinset: '#010409',
-        ghborder: '#30363d',
-        ghfg: '#e6edf3',
-        ghmuted: '#8b949e',
+        // The gh* tokens read from CSS custom properties (see styles.css) so
+        // the light/dark theme toggle in the header propagates into every
+        // Tailwind-classed component too — earlier these were hardcoded to
+        // dark-mode hex values and light mode only styled the app shell.
+        ghbg: 'var(--duo-bg)',
+        ghsurface: 'var(--duo-surface)',
+        ghinset: 'var(--duo-inset)',
+        ghborder: 'var(--duo-border)',
+        ghfg: 'var(--duo-fg)',
+        ghmuted: 'var(--duo-muted)',
         // The GitHub contribution-graph greens — used for the heatmap and
         // as the primary "positive" accent throughout the Duolingo layer.
         contrib: {
-          0: '#161b22',
-          1: '#0e4429',
-          2: '#006d32',
-          3: '#26a641',
-          4: '#39d353',
+          0: 'var(--duo-contrib-0)',
+          1: 'var(--duo-contrib-1)',
+          2: 'var(--duo-contrib-2)',
+          3: 'var(--duo-contrib-3)',
+          4: 'var(--duo-contrib-4)',
         },
         // Duolingo-flavoured accents.
         duo: {

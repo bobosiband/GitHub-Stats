@@ -161,9 +161,24 @@ export const openapiDocument = {
           languageCount: { type: 'integer' },
           topLanguages: {
             type: 'array',
+            description:
+              'Each entry carries per-language `xp` and `xpCap` so the frontend ' +
+              'renders the skill ring math without duplicating the XP formula.',
             items: {
               type: 'object',
-              properties: { name: { type: 'string' }, bytes: { type: 'integer' } },
+              properties: {
+                name: { type: 'string', example: 'TypeScript' },
+                bytes: { type: 'integer' },
+                xp: {
+                  type: 'integer',
+                  description: 'This language\'s XP contribution (capped at `xpCap`).',
+                },
+                xpCap: {
+                  type: 'integer',
+                  example: 300,
+                  description: 'Per-language XP cap (currently 300 — one maxed "skill").',
+                },
+              },
             },
           },
           longestStreak: { type: 'integer' },
@@ -318,7 +333,14 @@ export const openapiDocument = {
                   },
                 },
                 stats: { $ref: '#/components/schemas/Snapshot' },
-                progression: { $ref: '#/components/schemas/XpProgression' },
+                progression: {
+                  allOf: [{ $ref: '#/components/schemas/XpProgression' }],
+                  nullable: true,
+                  description:
+                    '`null` when the member has no snapshot for this cohort yet ' +
+                    '(the frontend should treat this as "first sync pending" rather ' +
+                    'than defaulting to Level 0/0 XP).',
+                },
               },
             },
           },
