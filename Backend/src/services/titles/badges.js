@@ -1,3 +1,5 @@
+import { levelForXp } from '../xp.js';
+
 /**
  * BADGE title definitions. Threshold-based, anyone can earn them, and once
  * earned they are **permanent** (never revoked).
@@ -79,5 +81,36 @@ export const BADGE_RULES = [
     flavor: 'People noticed.',
     stat: 'totalStars',
     qualifies: (s) => s.totalStars >= 10,
+  },
+  // XP-based level badges. Threshold rules go through the same engine as every
+  // other badge — no parallel awards path. `level` is derived from `xp` via the
+  // same curve used elsewhere so a member earning e.g. Level 10 in the UI has
+  // the corresponding badge in the DB.
+  {
+    key: 'level_5',
+    name: 'Level 5',
+    description: 'Reached Level 5 (~1,500 XP).',
+    flavor: 'Warming up.',
+    stat: 'xp',
+    qualifies: (s) => levelForXp(s.xp ?? 0) >= 5,
+    toValue: (s) => ({ level: levelForXp(s.xp ?? 0), xp: s.xp ?? 0 }),
+  },
+  {
+    key: 'level_10',
+    name: 'Level 10',
+    description: 'Reached Level 10 (~5,000 XP).',
+    flavor: 'Two digits.',
+    stat: 'xp',
+    qualifies: (s) => levelForXp(s.xp ?? 0) >= 10,
+    toValue: (s) => ({ level: levelForXp(s.xp ?? 0), xp: s.xp ?? 0 }),
+  },
+  {
+    key: 'level_20',
+    name: 'Level 20',
+    description: 'Reached Level 20 (~16,300 XP).',
+    flavor: 'Now we are shipping.',
+    stat: 'xp',
+    qualifies: (s) => levelForXp(s.xp ?? 0) >= 20,
+    toValue: (s) => ({ level: levelForXp(s.xp ?? 0), xp: s.xp ?? 0 }),
   },
 ];

@@ -23,10 +23,12 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   GITHUB_TOKEN: z.string().min(1, 'GITHUB_TOKEN is required'),
   ADMIN_TOKEN: z.string().min(1, 'ADMIN_TOKEN is required'),
-  // Default is every 5 minutes — the budget guard in src/lib/budget.js will
-  // automatically stretch this if the current member count would blow the
-  // GraphQL point budget below.
-  SYNC_CRON: z.string().default('*/5 * * * *'),
+  // Default is every 30 minutes. The external GitHub-Actions trigger uses the
+  // same cadence so the two triggers keep the deployed service warm on Render's
+  // free tier (which sleeps when idle — in-process node-cron can't fire while
+  // asleep). The budget guard in src/lib/budget.js will automatically stretch
+  // this if the current member count would blow the GraphQL point budget.
+  SYNC_CRON: z.string().default('*/30 * * * *'),
   GITHUB_POINTS_BUDGET: z.coerce.number().int().positive().default(4000),
   // If GitHub's own rate-limit `remaining` drops below this at run start,
   // the runner skips the tick entirely — hard floor under the estimate.

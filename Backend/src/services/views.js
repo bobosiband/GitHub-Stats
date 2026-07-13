@@ -1,12 +1,18 @@
 import { NotFoundError } from '../lib/errors.js';
+import { xpSummary } from './xp.js';
+import { buildRankDeltas } from './rankDeltas.js';
 
 /** Map leaderboard `sort` param → snapshot column. */
 export const LEADERBOARD_SORTS = {
+  xp: 'xp',
   commits: 'totalCommits',
   contributions: 'totalContributions',
   streak: 'longestStreak',
   stars: 'totalStars',
 };
+
+/** Default sort for the leaderboard when the client doesn't specify one. */
+export const DEFAULT_LEADERBOARD_SORT = 'xp';
 
 /** Public-facing subset of a Member. */
 export function publicMember(member) {
@@ -18,11 +24,16 @@ export function publicMember(member) {
   };
 }
 
-/** Serialise a StatSnapshot for the API (drops ids and the bulky calendar). */
-export function serializeSnapshot(s) {
+/**
+ * Serialise a StatSnapshot for the API. Drops ids and (by default) the bulky
+ * calendar. Pass `{ includeCalendar: true }` to include it — the profile route
+ * needs it for the heatmap, the leaderboard row does not.
+ */
+export function serializeSnapshot(s, { includeCalendar = false } = {}) {
   if (!s) return null;
-  return {
+  const out = {
     capturedAt: s.capturedAt,
+    xp: s.xp ?? 0,
     totalCommits: s.totalCommits,
     totalContributions: s.totalContributions,
     totalPRs: s.totalPRs,
@@ -41,6 +52,8 @@ export function serializeSnapshot(s) {
     weekendCommitRatio: s.weekendCommitRatio,
     nightCommitRatio: s.nightCommitRatio,
   };
+  if (includeCalendar) out.calendar = s.calendar ?? [];
+  return out;
 }
 
 export function serializeCohort(cohort, extra = {}) {
@@ -108,7 +121,7 @@ export async function getMemberByUsernameOrThrow(prisma, githubUsername) {
 async function latestSnapshotByMember(prisma, cohortId) {
   const rows = await prisma.$queryRaw`
     SELECT DISTINCT ON ("memberId")
-      "memberId", "cohortId", "capturedAt",
+      "memberId", "cohortId", "capturedAt", "xp",
       "totalCommits", "totalContributions", "totalPRs", "mergedPRs",
       "reviewsGiven", "issuesOpened", "followers", "totalStars",
       "repoCount", "contributedRepoCount", "languageCount", "topLanguages",
@@ -124,11 +137,38 @@ async function latestSnapshotByMember(prisma, cohortId) {
 }
 
 /**
- * Ranked leaderboard for a cohort. Members are ranked by the chosen stat
- * (descending); members without a snapshot yet sort to the bottom.
+ * Deterministic tie-breaker chain for the leaderboard:
+ *   1. Primary sort field (desc)
+ *   2. totalContributions (desc)
+ *   3. accountCreatedAt (asc) — older accounts sort ahead
+ *   4. memberId (asc) — deterministic final fallback
  */
-export async function buildLeaderboard(prisma, cohort, sort = 'commits') {
-  const field = LEADERBOARD_SORTS[sort] ?? LEADERBOARD_SORTS.commits;
+function compareLeaderboardRows(field) {
+  return (a, b) => {
+    const av = a.snapshot?.[field] ?? -1;
+    const bv = b.snapshot?.[field] ?? -1;
+    if (bv !== av) return bv - av;
+
+    const ac = a.snapshot?.totalContributions ?? -1;
+    const bc = b.snapshot?.totalContributions ?? -1;
+    if (bc !== ac) return bc - ac;
+
+    const at = a.member.accountCreatedAt?.getTime?.() ?? Infinity;
+    const bt = b.member.accountCreatedAt?.getTime?.() ?? Infinity;
+    if (at !== bt) return at - bt;
+
+    return a.member.id < b.member.id ? -1 : 1;
+  };
+}
+
+/**
+ * Ranked leaderboard for a cohort. Members are ranked by the chosen stat
+ * (descending); members without a snapshot yet sort to the bottom. Each entry
+ * also carries `rankDelta` — the change in rank since the immediately-previous
+ * snapshot set (see `services/rankDeltas.js`).
+ */
+export async function buildLeaderboard(prisma, cohort, sort = DEFAULT_LEADERBOARD_SORT) {
+  const field = LEADERBOARD_SORTS[sort] ?? LEADERBOARD_SORTS[DEFAULT_LEADERBOARD_SORT];
   const memberships = await prisma.membership.findMany({
     where: { cohortId: cohort.id },
     include: { member: true },
@@ -139,7 +179,12 @@ export async function buildLeaderboard(prisma, cohort, sort = 'commits') {
     member: ms.member,
     snapshot: latest.get(ms.memberId) ?? null,
   }));
-  rows.sort((a, b) => (b.snapshot?.[field] ?? -1) - (a.snapshot?.[field] ?? -1));
+  rows.sort(compareLeaderboardRows(field));
+
+  const currentRankById = new Map();
+  rows.forEach((r, i) => currentRankById.set(r.member.id, i + 1));
+
+  const deltasById = await buildRankDeltas(prisma, cohort.id, field, currentRankById);
 
   return {
     cohort: serializeCohort(cohort),
@@ -147,6 +192,7 @@ export async function buildLeaderboard(prisma, cohort, sort = 'commits') {
     sortField: field,
     ranking: rows.map((r, i) => ({
       rank: i + 1,
+      rankDelta: deltasById.get(r.member.id) ?? null,
       member: publicMember(r.member),
       stats: serializeSnapshot(r.snapshot),
     })),
@@ -184,12 +230,17 @@ export async function buildMemberProfile(prisma, member) {
       where: { memberId: member.id, cohortId: ms.cohortId },
       orderBy: { capturedAt: 'desc' },
     });
+    // Profile carries the calendar for the heatmap; xp/level/progress roll up
+    // for the ring around the avatar and the level badge.
+    const stats = serializeSnapshot(snapshot, { includeCalendar: true });
+    const progression = xpSummary(snapshot?.xp ?? 0);
     cohorts.push({
       cohort: serializeCohort(ms.cohort),
       role: ms.role,
       joinedAt: ms.joinedAt,
       programRepos: ms.programRepos.map((r) => ({ owner: r.owner, name: r.name })),
-      stats: serializeSnapshot(snapshot),
+      stats,
+      progression,
     });
   }
 

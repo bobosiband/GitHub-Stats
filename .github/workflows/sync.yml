@@ -1,12 +1,18 @@
 name: Scheduled sync
 
-# External trigger for GitRank's sync + title-eval runner. Fires every 3 hours
-# so the deployed service picks up new snapshots — and, on free tiers where the
-# service sleeps when idle, the curl both wakes it up and triggers the work.
+# External trigger for GitRank's sync + title-eval runner. Fires every 30
+# minutes so the deployed service picks up new snapshots — and, on free tiers
+# where the service sleeps when idle, the curl both wakes it up and triggers
+# the work.
+#
+# NOTE: GitHub Actions cron is best-effort — during heavy load a run may fire
+# several minutes late (or occasionally skip a slot). The in-process node-cron
+# tick and this external trigger share the same lock inside the sync runner
+# (`{ skipped: true, reason: 'in_progress' }`), so overlap is safe.
 
 on:
   schedule:
-    - cron: '0 */3 * * *'
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 jobs:

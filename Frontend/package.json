@@ -1,8 +1,8 @@
 {
   "name": "gitrank-frontend",
   "private": true,
-  "version": "0.1.0",
-  "description": "Frontend for GitRank — GitHub-Primer-styled leaderboards, titles, and profiles.",
+  "version": "0.2.0",
+  "description": "Frontend for GitRank — GitHub-dark palette fused with Duolingo-style gamified UI (XP, levels, streak flame, level-up celebrations, contribution heatmap, rank deltas).",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,12 +10,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "canvas-confetti": "^1.9.3",
+    "framer-motion": "^11.11.11",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.3",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.15",
     "vite": "^5.4.10"
   }
 }

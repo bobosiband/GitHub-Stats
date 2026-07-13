@@ -73,6 +73,7 @@ export default async function historyRoutes(fastify) {
       orderBy: { capturedAt: 'asc' },
       select: {
         capturedAt: true,
+        xp: true,
         totalCommits: true,
         totalContributions: true,
         mergedPRs: true,

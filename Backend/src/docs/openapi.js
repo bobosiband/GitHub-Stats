@@ -139,9 +139,15 @@ export const openapiDocument = {
       Snapshot: {
         type: 'object',
         nullable: true,
-        description: 'Latest stats for a member in a cohort; null if never synced.',
+        description:
+          'Latest stats for a member in a cohort; null if never synced. `xp` is ' +
+          'denormalised from the other stat columns via `src/services/xp.js`. On the ' +
+          'global cohort (rolling 365-day window) `xp` CAN decrease as old work falls ' +
+          'out of the window — that is intentional. `calendar` is only present on the ' +
+          "member profile response (for the heatmap); leaderboard rows omit it.",
         properties: {
           capturedAt: { type: 'string', format: 'date-time' },
+          xp: { type: 'integer', description: 'Denormalised XP for this snapshot.' },
           totalCommits: { type: 'integer' },
           totalContributions: { type: 'integer' },
           totalPRs: { type: 'integer' },
@@ -165,12 +171,44 @@ export const openapiDocument = {
           maxCommitsInOneDay: { type: 'integer' },
           weekendCommitRatio: { type: 'number', format: 'float' },
           nightCommitRatio: { type: 'number', format: 'float', nullable: true },
+          calendar: {
+            type: 'array',
+            description: 'Daily contribution counts. Only present on the member profile response.',
+            items: {
+              type: 'object',
+              properties: {
+                date: { type: 'string', example: '2025-06-14' },
+                count: { type: 'integer' },
+              },
+            },
+          },
+        },
+      },
+      XpProgression: {
+        type: 'object',
+        description: "Per-cohort XP roll-up used to render the level ring in the UI.",
+        properties: {
+          xp: { type: 'integer' },
+          level: { type: 'integer' },
+          levelProgress: {
+            type: 'number',
+            format: 'float',
+            description: '[0, 1] — how far into the current level.',
+          },
+          xpToNextLevel: { type: 'integer' },
         },
       },
       LeaderboardEntry: {
         type: 'object',
         properties: {
           rank: { type: 'integer' },
+          rankDelta: {
+            type: 'integer',
+            nullable: true,
+            description:
+              'Change in rank vs. the immediately-previous snapshot set. Positive = climbed, ' +
+              'negative = fell, 0 = unchanged. `null` for members without a previous snapshot.',
+          },
           member: { $ref: '#/components/schemas/MemberPublic' },
           stats: { $ref: '#/components/schemas/Snapshot' },
         },
@@ -179,8 +217,8 @@ export const openapiDocument = {
         type: 'object',
         properties: {
           cohort: { $ref: '#/components/schemas/Cohort' },
-          sort: { type: 'string', enum: ['commits', 'contributions', 'streak', 'stars'] },
-          sortField: { type: 'string', example: 'totalCommits' },
+          sort: { type: 'string', enum: ['xp', 'commits', 'contributions', 'streak', 'stars'] },
+          sortField: { type: 'string', example: 'xp' },
           ranking: { type: 'array', items: { $ref: '#/components/schemas/LeaderboardEntry' } },
         },
       },
@@ -280,6 +318,7 @@ export const openapiDocument = {
                   },
                 },
                 stats: { $ref: '#/components/schemas/Snapshot' },
+                progression: { $ref: '#/components/schemas/XpProgression' },
               },
             },
           },
@@ -308,6 +347,7 @@ export const openapiDocument = {
               type: 'object',
               properties: {
                 capturedAt: { type: 'string', format: 'date-time' },
+                xp: { type: 'integer' },
                 totalCommits: { type: 'integer' },
                 totalContributions: { type: 'integer' },
                 mergedPRs: { type: 'integer' },
@@ -346,21 +386,29 @@ export const openapiDocument = {
       },
       JoinRequest: {
         type: 'object',
-        required: ['githubUsername', 'zid'],
+        required: ['githubUsername'],
         additionalProperties: false,
         description:
           'Strict: only `githubUsername` and `zid` are accepted. Any other field ' +
           '(including `displayName` and `programRepo`, which were removed) is rejected ' +
           'with a VALIDATION_ERROR. `displayName`/`avatarUrl` auto-populate from the ' +
           "verified GitHub profile; program repos are now organiser-managed via " +
-          '`PUT /admin/members/{username}/program-repo`.',
+          '`PUT /admin/members/{username}/program-repo`.\n\n' +
+          '**`zid` semantics vary by cohort:**\n' +
+          '  - PROGRAM cohorts (any slug ≠ `global`): `zid` is **required**.\n' +
+          '  - GLOBAL cohort (slug `global`): `zid` is **optional** — omit it (or send ' +
+          "`\"\"`) to join as a non-UNSW member. A member who joined without a zid can " +
+          'later "claim" one by joining a program cohort with the same GitHub username ' +
+          "and a fresh zid — provided that zid isn't already linked to a different member.",
         properties: {
           githubUsername: { type: 'string', example: 'octocat', description: 'GitHub login.' },
           zid: {
             type: 'string',
+            nullable: true,
             pattern: '^z\\d{7}$',
             example: 'z1234567',
-            description: '"z" followed by exactly 7 digits.',
+            description:
+              '"z" followed by exactly 7 digits. Required for program cohorts, optional for `global`.',
           },
         },
       },
@@ -562,6 +610,11 @@ export const openapiDocument = {
       get: {
         tags: ['Leaderboard'],
         summary: 'Ranked members',
+        description:
+          'Default sort is `xp` — the primary progression metric. Ties break by ' +
+          '`totalContributions` desc, then `accountCreatedAt` asc. Every entry carries ' +
+          'a `rankDelta` field showing the change since the previous snapshot set ' +
+          '(`null` if the member has no previous snapshot).',
         parameters: [
           slugParam,
           {
@@ -570,8 +623,8 @@ export const openapiDocument = {
             required: false,
             schema: {
               type: 'string',
-              enum: ['commits', 'contributions', 'streak', 'stars'],
-              default: 'commits',
+              enum: ['xp', 'commits', 'contributions', 'streak', 'stars'],
+              default: 'xp',
             },
             description: 'Stat to rank by.',
           },

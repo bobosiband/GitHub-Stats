@@ -39,7 +39,7 @@ export function createSyncRunner({
   fetchRateLimit,
   logger,
   delayMs = 250,
-  cronExpr = '*/5 * * * *',
+  cronExpr = '*/30 * * * *',
   pointsBudget = 4000,
   minRemaining = 500,
 }) {

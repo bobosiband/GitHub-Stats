@@ -50,7 +50,7 @@ export function syncWindowForCohort(cohort, now, opts = {}) {
  * Map a {@link import('./github/fetchUserStats.js').UserStats} to the append-only
  * StatSnapshot columns.
  */
-function statsToSnapshot(stats, { memberId, cohortId, capturedAt }) {
+export function statsToSnapshot(stats, { memberId, cohortId, capturedAt }) {
   return {
     memberId,
     cohortId,
@@ -73,6 +73,11 @@ function statsToSnapshot(stats, { memberId, cohortId, capturedAt }) {
     weekendCommitRatio: stats.weekendCommitRatio,
     nightCommitRatio: stats.nightCommitRatio,
     calendar: stats.calendar,
+    // XP is denormalised here so the leaderboard can ORDER BY a single indexed
+    // column without a JS-side reduce. Recomputed every snapshot — on the
+    // global cohort's rolling window this means XP CAN decrease as old work
+    // falls off the trailing 365-day window; that's intentional.
+    xp: computeXp(stats),
   };
 }
 

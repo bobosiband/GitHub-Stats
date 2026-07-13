@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { TEST_DATABASE_URL } from './testDbUrl.js';
 import { ensureGlobalCohort } from '../../src/services/global.js';
+import { computeXp } from '../../src/services/xp.js';
 
 let prisma;
 
@@ -79,30 +80,33 @@ const BASE_CAPTURED_AT = Date.UTC(2025, 0, 1);
  * monotonically increasing time; pass an explicit one to control ordering.
  */
 export function makeSnapshot(memberId, cohortId, overrides = {}) {
-  return getPrisma().statSnapshot.create({
-    data: {
-      memberId,
-      cohortId,
-      capturedAt: new Date(BASE_CAPTURED_AT + snapshotSeq++ * 60_000),
-      totalCommits: 0,
-      totalContributions: 0,
-      totalPRs: 0,
-      mergedPRs: 0,
-      reviewsGiven: 0,
-      issuesOpened: 0,
-      followers: 0,
-      totalStars: 0,
-      repoCount: 0,
-      contributedRepoCount: 0,
-      languageCount: 0,
-      topLanguages: [],
-      longestStreak: 0,
-      currentStreak: 0,
-      maxCommitsInOneDay: 0,
-      weekendCommitRatio: 0,
-      nightCommitRatio: null,
-      calendar: [],
-      ...overrides,
-    },
-  });
+  const data = {
+    memberId,
+    cohortId,
+    capturedAt: new Date(BASE_CAPTURED_AT + snapshotSeq++ * 60_000),
+    totalCommits: 0,
+    totalContributions: 0,
+    totalPRs: 0,
+    mergedPRs: 0,
+    reviewsGiven: 0,
+    issuesOpened: 0,
+    followers: 0,
+    totalStars: 0,
+    repoCount: 0,
+    contributedRepoCount: 0,
+    languageCount: 0,
+    topLanguages: [],
+    longestStreak: 0,
+    currentStreak: 0,
+    maxCommitsInOneDay: 0,
+    weekendCommitRatio: 0,
+    nightCommitRatio: null,
+    calendar: [],
+    ...overrides,
+  };
+  // Mirror the sync path — derive `xp` from the same fields so leaderboard
+  // tests written against arbitrary stat overrides get a coherent xp value
+  // without every caller having to pass one. Explicit overrides still win.
+  if (overrides.xp === undefined) data.xp = computeXp(data);
+  return getPrisma().statSnapshot.create({ data });
 }

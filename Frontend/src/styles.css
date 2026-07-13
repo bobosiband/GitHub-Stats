@@ -1,5 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* ============================================================================
    GitRank frontend — one stylesheet, organised top-down:
+     0.  Tailwind directives (above)
      1.  Design tokens (Primer light + dark, contribution-graph ramps)
      2.  Reset + base
      3.  Layout: header, nav, footer, page shell
@@ -10,6 +15,9 @@
      8.  Forms (Join)
      9.  Utility classes
      10. Responsive tweaks
+
+   Duolingo-style pieces live in Tailwind-classed React components under
+   src/components/duo/. This file is the untouched GitHub-Primer base.
    ============================================================================ */
 
 

@@ -71,14 +71,25 @@ describe('GET /cohorts/:slug/leaderboard', () => {
     return cohort;
   }
 
-  it('defaults to sorting by commits', async () => {
+  it('defaults to sorting by xp', async () => {
     await seedLeaderboard();
     const res = await app.inject({ method: 'GET', url: '/cohorts/lb/leaderboard' });
     expect(res.statusCode).toBe(200);
     const body = res.json();
+    expect(body.sort).toBe('xp');
+    expect(body.sortField).toBe('xp');
+    // Every entry surfaces a rankDelta field (null on first sync).
+    expect(body.ranking[0]).toHaveProperty('rankDelta');
+    expect(body.ranking[0].rank).toBe(1);
+  });
+
+  it('ranks by commits when sort=commits is requested explicitly', async () => {
+    await seedLeaderboard();
+    const res = await app.inject({ method: 'GET', url: '/cohorts/lb/leaderboard?sort=commits' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
     expect(body.sortField).toBe('totalCommits');
     expect(body.ranking.map((r) => r.member.githubUsername)).toEqual(['alice', 'carol', 'bob']);
-    expect(body.ranking[0].rank).toBe(1);
   });
 
   it('sorts by the requested stat', async () => {

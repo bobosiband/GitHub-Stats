@@ -1,12 +1,23 @@
 import { z } from 'zod';
-import { buildLeaderboard, cohortReadEtag, getCohortBySlugOrThrow } from '../services/views.js';
+import {
+  buildLeaderboard,
+  cohortReadEtag,
+  getCohortBySlugOrThrow,
+  DEFAULT_LEADERBOARD_SORT,
+} from '../services/views.js';
 
 const querySchema = z.object({
-  sort: z.enum(['commits', 'contributions', 'streak', 'stars']).default('commits'),
+  sort: z
+    .enum(['xp', 'commits', 'contributions', 'streak', 'stars'])
+    .default(DEFAULT_LEADERBOARD_SORT),
 });
 
 export default async function leaderboardRoutes(fastify) {
-  // GET /cohorts/:slug/leaderboard?sort=commits|contributions|streak|stars
+  // GET /cohorts/:slug/leaderboard?sort=xp|commits|contributions|streak|stars
+  //
+  // Default sort is `xp` — the primary progression metric. Every entry also
+  // carries `rankDelta` (positive = climbed, negative = fell, 0 = same, null =
+  // no previous rank / brand-new member).
   //
   // ETag: derived from the cohort's latest snapshot `capturedAt` + membership
   // count. Two cheap aggregates, no row loading — so a conditional GET with

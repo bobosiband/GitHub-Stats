@@ -22,6 +22,7 @@
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.js",
     "db:reset": "prisma migrate reset --force",
+    "db:backfill-xp": "node scripts/backfill-xp.mjs",
     "docs:gen": "node scripts/gen-openapi.mjs"
   },
   "prisma": {
