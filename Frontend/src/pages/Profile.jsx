@@ -17,6 +17,7 @@
  * Data: GET /members/:username.
  */
 
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, getMember } from '../lib/api.js';
 import { useFetch, num, shortDate, timeAgo } from '../lib/util.js';
@@ -253,36 +254,36 @@ function CohortBlock({ entry }) {
 
 function TitleAndBadgeBlock({ titles, badges }) {
   const records = titles.filter((t) => t.kind === 'RECORD');
+  const heldRecords = records.filter((t) => t.active);
+  const pastRecords = records.filter((t) => !t.active);
   return (
     <section className="rounded-2xl border-2 border-ghborder bg-ghsurface p-4 space-y-4">
       <div>
         <h2 className="text-lg font-black text-ghfg mb-2">
           <IconTrophy size={16} /> Titles held
+          <span className="ml-2 text-ghmuted font-mono text-sm">({heldRecords.length})</span>
         </h2>
-        {records.length ? (
+        {heldRecords.length ? (
           <div className="flex flex-wrap gap-2">
-            {records.map((t, i) => (
+            {heldRecords.map((t, i) => (
               <span
                 key={i}
-                className={
-                  'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold border-2 ' +
-                  (t.active
-                    ? 'bg-duo-gold/15 text-duo-gold border-duo-gold/40'
-                    : 'bg-ghinset text-ghmuted border-ghborder line-through opacity-75')
-                }
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold border-2 bg-duo-gold/15 text-duo-gold border-duo-gold/40"
               >
                 <IconTrophy size={10} /> {t.name}
-                <span className="opacity-70">· {t.cohort.name}</span>
+                <span className="text-duo-gold/80 font-normal">· {t.cohort.name}</span>
               </span>
             ))}
           </div>
         ) : (
           <div className="text-ghmuted text-sm italic">No records held yet.</div>
         )}
+        {pastRecords.length > 0 && <PastTitlesToggle records={pastRecords} />}
       </div>
       <div>
         <h2 className="text-lg font-black text-ghfg mb-2">
           <IconMedal size={16} /> Badges
+          <span className="ml-2 text-ghmuted font-mono text-sm">({badges.length})</span>
         </h2>
         {badges.length ? (
           <div className="flex flex-wrap gap-2">
@@ -292,7 +293,9 @@ function TitleAndBadgeBlock({ titles, badges }) {
                 className="inline-flex items-center gap-1.5 rounded-full bg-duo-green/15 text-duo-green border-2 border-duo-green/40 px-3 py-1 text-xs font-bold"
               >
                 <IconMedal size={10} /> {b.name}
-                <span className="opacity-70">· {b.cohort?.name}</span>
+                {b.cohort?.name && (
+                  <span className="text-duo-green/80 font-normal">· {b.cohort.name}</span>
+                )}
               </span>
             ))}
           </div>
@@ -301,6 +304,47 @@ function TitleAndBadgeBlock({ titles, badges }) {
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * Collapsible list of records the member used to hold but has since lost.
+ * The previous rendering was a gray-on-dark strikethrough chip that fails
+ * WCAG AA contrast; hiding them by default plus a higher-contrast chip when
+ * expanded fixes both the readability and the visual clutter.
+ */
+function PastTitlesToggle({ records }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1.5 text-xs font-bold text-ghmuted hover:text-ghfg border border-ghborder rounded-full px-2.5 py-1"
+        aria-expanded={open}
+        aria-controls="past-titles-panel"
+      >
+        {open ? '▾' : '▸'} Past titles ({records.length})
+      </button>
+      {open && (
+        <div
+          id="past-titles-panel"
+          className="mt-2 flex flex-wrap gap-2"
+        >
+          {records.map((t, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs border-2 bg-ghinset text-ghfg border-ghborder"
+              title="Previously held — record has since transferred to another member"
+            >
+              <IconTrophy size={10} className="opacity-60" />
+              <span className="line-through decoration-ghmuted">{t.name}</span>
+              <span className="text-ghmuted font-normal">· {t.cohort.name}</span>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
