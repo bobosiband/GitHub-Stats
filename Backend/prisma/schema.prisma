@@ -29,7 +29,10 @@ enum CohortKind {
 model Member {
   id               String   @id @default(cuid())
   githubUsername   String   @unique
-  zid              String   @unique
+  // Nullable so non-UNSW members can join the `global` cohort without a zid.
+  // Postgres' unique index treats NULLs as distinct, so `@unique` still holds
+  // for real zids while permitting any number of NULL rows.
+  zid              String?  @unique
   githubId         Int?
   displayName      String?
   avatarUrl        String?
