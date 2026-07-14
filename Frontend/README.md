@@ -137,13 +137,3 @@ Runtime:
 - `framer-motion` — springs + stagger for the Duolingo layer
 - `canvas-confetti` — one-off level-up burst
 
-Dev / build:
-
-- `vite`, `@vitejs/plugin-react`
-- `tailwindcss`, `postcss`, `autoprefixer` — Tailwind is scoped to the
-  `duo/*` components; the existing GitHub-Primer stylesheet at
-  `src/styles.css` remains the base coat.
-
-Octicons are inlined in `src/components/Icons.jsx`. Every animated component
-respects `prefers-reduced-motion` (confetti, springs, count-ups all disable
-themselves) via [`src/hooks/useReducedMotion.js`](src/hooks/useReducedMotion.js).
