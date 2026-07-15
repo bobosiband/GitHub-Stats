@@ -517,14 +517,36 @@
         "type": "object",
         "description": "Progress toward a single unearned badge. `current` is the member's best value for `stat` across their cohort snapshots; `target` is the rule's threshold (for XP-level badges, the XP required for that level). `pct` is `current / target` clamped to [0, 1].",
         "properties": {
-          "key": { "type": "string", "example": "century" },
-          "name": { "type": "string", "example": "Century" },
-          "description": { "type": "string" },
-          "flavor": { "type": "string", "nullable": true },
-          "stat": { "type": "string", "example": "totalCommits" },
-          "current": { "type": "number" },
-          "target": { "type": "number" },
-          "pct": { "type": "number", "format": "float", "description": "[0, 1]" }
+          "key": {
+            "type": "string",
+            "example": "century"
+          },
+          "name": {
+            "type": "string",
+            "example": "Century"
+          },
+          "description": {
+            "type": "string"
+          },
+          "flavor": {
+            "type": "string",
+            "nullable": true
+          },
+          "stat": {
+            "type": "string",
+            "example": "totalCommits"
+          },
+          "current": {
+            "type": "number"
+          },
+          "target": {
+            "type": "number"
+          },
+          "pct": {
+            "type": "number",
+            "format": "float",
+            "description": "[0, 1]"
+          }
         }
       },
       "MemberProfile": {
@@ -633,10 +655,24 @@
       "CompareVerdict": {
         "type": "object",
         "properties": {
-          "stat": { "type": "string", "example": "totalCommits" },
-          "a": { "type": "number" },
-          "b": { "type": "number" },
-          "winner": { "type": "string", "enum": ["a", "b", "tie"] }
+          "stat": {
+            "type": "string",
+            "example": "totalCommits"
+          },
+          "a": {
+            "type": "number"
+          },
+          "b": {
+            "type": "number"
+          },
+          "winner": {
+            "type": "string",
+            "enum": [
+              "a",
+              "b",
+              "tie"
+            ]
+          }
         }
       },
       "CompareResult": {
@@ -646,27 +682,43 @@
           "a": {
             "type": "object",
             "properties": {
-              "profile": { "$ref": "#/components/schemas/MemberProfile" },
-              "snapshot": { "$ref": "#/components/schemas/Snapshot" }
+              "profile": {
+                "$ref": "#/components/schemas/MemberProfile"
+              },
+              "snapshot": {
+                "$ref": "#/components/schemas/Snapshot"
+              }
             }
           },
           "b": {
             "type": "object",
             "properties": {
-              "profile": { "$ref": "#/components/schemas/MemberProfile" },
-              "snapshot": { "$ref": "#/components/schemas/Snapshot" }
+              "profile": {
+                "$ref": "#/components/schemas/MemberProfile"
+              },
+              "snapshot": {
+                "$ref": "#/components/schemas/Snapshot"
+              }
             }
           },
           "stats": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/CompareVerdict" }
+            "items": {
+              "$ref": "#/components/schemas/CompareVerdict"
+            }
           },
           "score": {
             "type": "object",
             "properties": {
-              "a": { "type": "integer" },
-              "b": { "type": "integer" },
-              "ties": { "type": "integer" }
+              "a": {
+                "type": "integer"
+              },
+              "b": {
+                "type": "integer"
+              },
+              "ties": {
+                "type": "integer"
+              }
             }
           }
         }
@@ -1338,14 +1390,18 @@
             "name": "a",
             "in": "query",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "GitHub username on the left side of the duel."
           },
           {
             "name": "b",
             "in": "query",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "GitHub username on the right side of the duel."
           }
         ],
@@ -1354,7 +1410,9 @@
             "description": "Comparison result",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/CompareResult" }
+                "schema": {
+                  "$ref": "#/components/schemas/CompareResult"
+                }
               }
             }
           },
@@ -1362,7 +1420,9 @@
             "description": "Missing/invalid query parameters",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/Error" }
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
               }
             }
           },
@@ -1370,7 +1430,9 @@
             "description": "Unknown member on either side",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/Error" }
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
               }
             }
           }
