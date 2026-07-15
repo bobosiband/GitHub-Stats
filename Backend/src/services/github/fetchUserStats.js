@@ -24,7 +24,7 @@ import {
  * @property {number} repoCount
  * @property {number} totalStars
  * @property {number} languageCount
- * @property {{name: string, bytes: number}[]} topLanguages
+ * @property {{name: string, bytes: number}[]} topLanguages  full sorted list (bytes desc)
  * @property {number} totalCommits
  * @property {number} totalPRs
  * @property {number} reviewsGiven
@@ -83,7 +83,9 @@ export function normalizeUserStats(
     }
   }
   const sortedLangs = [...langBytes.entries()].sort((a, b) => b[1] - a[1]);
-  const topLanguages = sortedLangs.slice(0, 5).map(([name, bytes]) => ({ name, bytes }));
+  // Ship the FULL sorted list, not a top-5 slice — the profile UI reveals the
+  // long tail on demand and the total-byte share is derived client-side.
+  const topLanguages = sortedLangs.map(([name, bytes]) => ({ name, bytes }));
 
   const cc = user.contributionsCollection ?? {};
   const calendar = [];

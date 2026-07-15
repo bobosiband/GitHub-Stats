@@ -45,8 +45,10 @@ describe('normalizeUserStats', () => {
     expect(stats.totalContributions).toBe(36);
   });
 
-  it('aggregates languages by bytes and takes the top 5', () => {
+  it('aggregates languages by bytes and returns the full sorted list', () => {
     expect(stats.languageCount).toBe(4);
+    // Full list (bytes desc) — the profile UI decides how many chips to show
+    // up front and reveals the rest on click.
     expect(stats.topLanguages).toEqual([
       { name: 'TypeScript', bytes: 13000 },
       { name: 'JavaScript', bytes: 10000 },

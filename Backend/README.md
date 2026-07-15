@@ -125,6 +125,7 @@ it with `npm run docs:gen`.
 | `GET /members/:username`             | —     | Profile: latest stats per cohort, titles (incl. past), badges.|
 | `GET /members/:username/history?cohort=…&days=…` | — | Slim time-series (per-UTC-day, oldest-first) for progress charts. |
 | `GET /members/:username/calendar?cohort=…` | — | Daily contribution calendar from the latest snapshot. |
+| `GET /members/compare?a=…&b=…`       | —     | Head-to-head duel: both profiles, latest global snapshots, per-stat winner and running score. |
 | `POST /cohorts/:slug/join`           | —     | **Public** self-serve join (see below).                       |
 | `POST /admin/cohorts`                | admin | Create a cohort.                                              |
 | `PATCH /admin/cohorts/:slug`         | admin | Update mutable fields. Date changes trigger a background re-sync. Global cohort accepts only `name`. |

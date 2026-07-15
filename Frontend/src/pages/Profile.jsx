@@ -37,6 +37,7 @@ import ContributionHeatmap from '../components/duo/ContributionHeatmap.jsx';
 import CountUp from '../components/duo/CountUp.jsx';
 import LevelUpToast from '../components/duo/LevelUpToast.jsx';
 import XpProgressBar from '../components/duo/XpProgressBar.jsx';
+import BadgeProgressList from '../components/duo/BadgeProgress.jsx';
 import { SkeletonList } from '../components/duo/SkeletonRow.jsx';
 import { progressionFrom } from '../lib/xp.js';
 
@@ -78,7 +79,7 @@ export default function Profile() {
   }
   if (!data) return null;
 
-  const { member, cohorts, titles, badges } = data;
+  const { member, cohorts, titles, badges, badgeProgress = [] } = data;
   const globalCohort = cohorts.find((c) => c.cohort.slug === GLOBAL_SLUG) ?? cohorts[0] ?? null;
   // `progressionFrom` returns null when the primary cohort has no snapshot yet;
   // the sidebar renders an "unsynced" empty state in that case rather than
@@ -184,6 +185,12 @@ export default function Profile() {
 
           {(titles?.length ?? 0) + badgeAwards.length > 0 && (
             <TitleAndBadgeBlock titles={titles ?? []} badges={badgeAwards} />
+          )}
+
+          {badgeProgress.length > 0 && (
+            <section className="rounded-2xl border-2 border-ghborder bg-ghsurface p-4">
+              <BadgeProgressList items={badgeProgress} />
+            </section>
           )}
         </section>
       </div>

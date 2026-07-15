@@ -1,6 +1,8 @@
 import { NotFoundError } from '../lib/errors.js';
 import { xpSummary, perLanguageXp, PER_LANGUAGE_XP_CAP } from './xp.js';
 import { buildRankDeltas } from './rankDeltas.js';
+import { topBadgeProgress } from './titles/progress.js';
+import { GLOBAL_COHORT_SLUG } from './global.js';
 
 /** Map leaderboard `sort` param → snapshot column. */
 export const LEADERBOARD_SORTS = {
@@ -248,11 +250,15 @@ export async function buildMemberProfile(prisma, member) {
   });
 
   const cohorts = [];
+  // Kept aside for the badge-progress computation below. Each entry is the
+  // latest snapshot for a cohort — the "current picture" the frontend renders.
+  const latestSnapshots = [];
   for (const ms of memberships) {
     const snapshot = await prisma.statSnapshot.findFirst({
       where: { memberId: member.id, cohortId: ms.cohortId },
       orderBy: { capturedAt: 'desc' },
     });
+    if (snapshot) latestSnapshots.push(snapshot);
     // Profile carries the calendar for the heatmap; xp/level/progress roll up
     // for the ring around the avatar and the level badge. `progression` is
     // deliberately `null` when there is no snapshot yet — the frontend keys
@@ -276,6 +282,17 @@ export async function buildMemberProfile(prisma, member) {
     orderBy: { awardedAt: 'desc' },
   });
   const serialized = awards.map(serializeAward);
+  const badges = serialized.filter((a) => a.kind === 'BADGE');
+
+  // "Next up" — top 4 badges the member is closest to earning. Pure derivation
+  // over the snapshots we already fetched; no extra DB round-trips. A badge
+  // counts as earned if it appears at all in `badges` (any cohort), so we
+  // don't nag members to re-earn a global badge for each cohort.
+  const earnedBadgeKeys = new Set(badges.map((b) => b.key));
+  const badgeProgress = topBadgeProgress({
+    snapshots: latestSnapshots,
+    earnedKeys: earnedBadgeKeys,
+  });
 
   return {
     // NB: `zid` is deliberately omitted here — it is PII and the profile route
@@ -291,7 +308,8 @@ export async function buildMemberProfile(prisma, member) {
     },
     cohorts,
     titles: serialized.filter((a) => a.kind === 'RECORD'),
-    badges: serialized.filter((a) => a.kind === 'BADGE'),
+    badges,
+    badgeProgress,
   };
 }
 
@@ -340,4 +358,91 @@ export async function buildCohortTitles(prisma, cohort) {
   }
 
   return { cohort: serializeCohort(cohort), records, badges };
+}
+
+/**
+ * Fixed stat list for the head-to-head comparison. Order matters — the frontend
+ * table renders rows in this order. Adding a stat here also adds it to the
+ * running-score tally, so keep the set balanced across "productivity" and
+ * "reach" metrics.
+ */
+export const COMPARE_STATS = [
+  'totalCommits',
+  'totalContributions',
+  'mergedPRs',
+  'reviewsGiven',
+  'issuesOpened',
+  'longestStreak',
+  'totalStars',
+  'followers',
+  'languageCount',
+];
+
+/** Latest global-cohort snapshot for a member (null if the member never synced). */
+async function latestGlobalSnapshot(prisma, memberId) {
+  const global = await prisma.cohort.findUnique({ where: { slug: GLOBAL_COHORT_SLUG } });
+  if (!global) return null;
+  return prisma.statSnapshot.findFirst({
+    where: { memberId, cohortId: global.id },
+    orderBy: { capturedAt: 'desc' },
+  });
+}
+
+/**
+ * Head-to-head duel between two members. Returns both public profiles, their
+ * latest global-cohort snapshots, and a per-stat verdict for {@link COMPARE_STATS}.
+ *
+ * Missing-stat handling (documented in openapi):
+ *   - If a member has no snapshot, all their stats are treated as 0. That means
+ *     the *other* member wins whenever they have a positive value, and it's a
+ *     tie when both are 0. This keeps the endpoint useful for members who just
+ *     joined — the duel renders instead of 404-ing — while making it obvious
+ *     that an unsynced member hasn't "beaten" anyone.
+ *
+ * Pure view: no writes, no side effects. Composes existing helpers only.
+ *
+ * @param {import('@prisma/client').PrismaClient} prisma
+ * @param {{a: object, b: object}} pair  members already loaded via getMemberByUsernameOrThrow
+ */
+export async function buildCompare(prisma, { a, b }) {
+  const [aProfile, bProfile, aSnap, bSnap] = await Promise.all([
+    buildMemberProfile(prisma, a),
+    buildMemberProfile(prisma, b),
+    latestGlobalSnapshot(prisma, a.id),
+    latestGlobalSnapshot(prisma, b.id),
+  ]);
+
+  const stats = COMPARE_STATS.map((stat) => {
+    const av = numericStat(aSnap?.[stat]);
+    const bv = numericStat(bSnap?.[stat]);
+    let winner = 'tie';
+    if (av > bv) winner = 'a';
+    else if (bv > av) winner = 'b';
+    return { stat, a: av, b: bv, winner };
+  });
+
+  const score = { a: 0, b: 0, ties: 0 };
+  for (const s of stats) {
+    if (s.winner === 'a') score.a += 1;
+    else if (s.winner === 'b') score.b += 1;
+    else score.ties += 1;
+  }
+
+  return {
+    a: {
+      profile: aProfile,
+      snapshot: serializeSnapshot(aSnap),
+    },
+    b: {
+      profile: bProfile,
+      snapshot: serializeSnapshot(bSnap),
+    },
+    stats,
+    score,
+  };
+}
+
+function numericStat(v) {
+  if (typeof v !== 'number' || Number.isNaN(v)) return 0;
+  return v;
 }

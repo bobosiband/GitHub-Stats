@@ -192,6 +192,10 @@ export const getCohortTitles = (slug) =>
 export const getMember = (username) =>
   request(`/members/${encodeURIComponent(username)}`);
 
+/** GET /members/compare?a=…&b=… — head-to-head duel between two members. */
+export const compareMembers = (a, b) =>
+  request(`/members/compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`);
+
 /**
  * POST /cohorts/:slug/join
  * Backend body accepts only `{ githubUsername, zid }` (strict); we still send

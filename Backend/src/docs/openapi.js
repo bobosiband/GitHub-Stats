@@ -162,8 +162,10 @@ export const openapiDocument = {
           topLanguages: {
             type: 'array',
             description:
-              'Each entry carries per-language `xp` and `xpCap` so the frontend ' +
-              'renders the skill ring math without duplicating the XP formula.',
+              'Full, byte-sorted (desc) list of the member\'s languages. Each entry carries ' +
+              'per-language `xp` and `xpCap` so the frontend renders the skill ring math ' +
+              'without duplicating the XP formula. The profile UI shows the top few chips and ' +
+              'reveals the rest on demand — the total-byte share is derived client-side.',
             items: {
               type: 'object',
               properties: {
@@ -300,6 +302,24 @@ export const openapiDocument = {
           active: { type: 'boolean' },
         },
       },
+      BadgeProgress: {
+        type: 'object',
+        description:
+          'Progress toward a single unearned badge. `current` is the member\'s best value ' +
+          'for `stat` across their cohort snapshots; `target` is the rule\'s threshold ' +
+          '(for XP-level badges, the XP required for that level). `pct` is `current / target` ' +
+          'clamped to [0, 1].',
+        properties: {
+          key: { type: 'string', example: 'century' },
+          name: { type: 'string', example: 'Century' },
+          description: { type: 'string' },
+          flavor: { type: 'string', nullable: true },
+          stat: { type: 'string', example: 'totalCommits' },
+          current: { type: 'number' },
+          target: { type: 'number' },
+          pct: { type: 'number', format: 'float', description: '[0, 1]' },
+        },
+      },
       MemberProfile: {
         type: 'object',
         properties: {
@@ -352,6 +372,57 @@ export const openapiDocument = {
           badges: {
             type: 'array',
             items: { $ref: '#/components/schemas/MemberTitle' },
+          },
+          badgeProgress: {
+            type: 'array',
+            description:
+              '"Next up" — the top 4 unearned badges (highest `pct` first). Empty when ' +
+              'the member has no snapshots yet.',
+            items: { $ref: '#/components/schemas/BadgeProgress' },
+          },
+        },
+      },
+      CompareVerdict: {
+        type: 'object',
+        properties: {
+          stat: { type: 'string', example: 'totalCommits' },
+          a: { type: 'number' },
+          b: { type: 'number' },
+          winner: { type: 'string', enum: ['a', 'b', 'tie'] },
+        },
+      },
+      CompareResult: {
+        type: 'object',
+        description:
+          'Head-to-head duel. Each side carries the full `MemberProfile` plus the latest ' +
+          'global-cohort `Snapshot` (null when the member has no snapshot yet). ' +
+          '`stats` is a fixed-order list of per-stat verdicts; `score` counts wins on ' +
+          'each side plus ties. Members without a snapshot have every stat treated as 0 — ' +
+          'they lose any stat the opponent has a positive value on, and tie only when the ' +
+          'opponent is also 0 on that stat.',
+        properties: {
+          a: {
+            type: 'object',
+            properties: {
+              profile: { $ref: '#/components/schemas/MemberProfile' },
+              snapshot: { $ref: '#/components/schemas/Snapshot' },
+            },
+          },
+          b: {
+            type: 'object',
+            properties: {
+              profile: { $ref: '#/components/schemas/MemberProfile' },
+              snapshot: { $ref: '#/components/schemas/Snapshot' },
+            },
+          },
+          stats: { type: 'array', items: { $ref: '#/components/schemas/CompareVerdict' } },
+          score: {
+            type: 'object',
+            properties: {
+              a: { type: 'integer' },
+              b: { type: 'integer' },
+              ties: { type: 'integer' },
+            },
           },
         },
       },
@@ -691,6 +762,40 @@ export const openapiDocument = {
           404: errorResponse('Unknown slug'),
           409: errorResponse('Duplicate zid/username belonging to a different identity'),
           422: errorResponse('GitHub user not found'),
+        },
+      },
+    },
+    '/members/compare': {
+      get: {
+        tags: ['Members'],
+        summary: 'Head-to-head member comparison',
+        description:
+          'Duel between two members on their latest global-cohort snapshots. Returns both ' +
+          'full profiles, both latest global snapshots, a per-stat verdict list, and a ' +
+          'running score. A member without any snapshot is treated as having 0 on every ' +
+          "stat — they lose any stat the opponent has a positive value on, and tie on stats " +
+          "the opponent is also 0 on. 404s (standard error shape) if either username is " +
+          'unknown.',
+        parameters: [
+          {
+            name: 'a',
+            in: 'query',
+            required: true,
+            schema: { type: 'string' },
+            description: 'GitHub username on the left side of the duel.',
+          },
+          {
+            name: 'b',
+            in: 'query',
+            required: true,
+            schema: { type: 'string' },
+            description: 'GitHub username on the right side of the duel.',
+          },
+        ],
+        responses: {
+          200: jsonResponse('Comparison result', 'CompareResult'),
+          400: errorResponse('Missing/invalid query parameters'),
+          404: errorResponse('Unknown member on either side'),
         },
       },
     },
