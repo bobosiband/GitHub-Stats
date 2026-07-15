@@ -11,6 +11,7 @@ import Leaderboard from './pages/Leaderboard.jsx';
 import Titles from './pages/Titles.jsx';
 import Analytics from './pages/Analytics.jsx';
 import Profile from './pages/Profile.jsx';
+import Compare from './pages/Compare.jsx';
 import Join from './pages/Join.jsx';
 import NotFound from './pages/NotFound.jsx';
 
@@ -27,6 +28,7 @@ export default function App() {
             <Route path="analytics" element={<Analytics />} />
           </Route>
           <Route path="u/:username" element={<Profile />} />
+          <Route path="compare" element={<Compare />} />
           <Route path="join" element={<Join />} />
           <Route path="*" element={<NotFound />} />
         </Route>

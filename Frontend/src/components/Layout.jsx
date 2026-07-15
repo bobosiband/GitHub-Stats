@@ -50,6 +50,9 @@ export default function Layout() {
             <NavLink to="/cohorts/global" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
               Global
             </NavLink>
+            <NavLink to="/compare" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              Compare
+            </NavLink>
             <NavLink to="/join" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
               Join
             </NavLink>
