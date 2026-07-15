@@ -122,14 +122,20 @@ const MEMBERS = [
       totalStars: 45,
       repoCount: 18,
       contributedRepoCount: 25,
-      languageCount: 7,
+      languageCount: 8,
     },
+    // 8 languages — the "+N" reveal on the profile only appears when a
+    // member has more than the collapsed cap, so we intentionally seed
+    // one member above it so the feature is testable against the seed.
     topLanguages: [
       { name: 'COBOL', bytes: 700000 },
       { name: 'Go', bytes: 500000 },
       { name: 'Rust', bytes: 300000 },
       { name: 'TypeScript', bytes: 200000 },
       { name: 'Python', bytes: 100000 },
+      { name: 'Ruby', bytes: 60000 },
+      { name: 'Shell', bytes: 20000 },
+      { name: 'Makefile', bytes: 8000 },
     ],
     nightCommitRatio: null,
     calendarFn: personality({ base: 3, gapEvery: 12 }),

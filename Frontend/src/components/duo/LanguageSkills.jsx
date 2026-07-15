@@ -1,22 +1,27 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { languageColor } from '../../lib/linguist.js';
 import { perLanguageXp } from '../../lib/xp.js';
 import { useReducedMotion } from '../../hooks/useReducedMotion.js';
 
 /**
- * Duolingo "skill circle" for each of a member's top languages.
+ * Language "skill circles" for a member's profile.
  *
- * Fullness of the ring = `lang.xp / lang.xpCap` (defaults to a 300-XP cap when
- * the backend hasn't annotated the entry). This is now the single source of
- * truth — the backend ships per-language xp on every `topLanguages` entry
- * (`services/views.js#annotateTopLanguages`), so the ring math no longer
- * drifts from the XP formula.
+ * Rendering model — deliberately dumb, so the reveal can't get stuck:
+ *   - Every language in `topLanguages` renders once, unconditionally.
+ *   - Chips at index >= COLLAPSED_LIMIT carry the `is-extra` class, which is
+ *     `display: none` until the container gains `is-expanded` (a plain CSS
+ *     class toggle — no JS measurement, no max-height math).
+ *   - The toggle button (a real <button>) flips the class + aria-expanded.
+ *   - Reveal animation is a CSS @keyframes (see `styles.css`) with a stagger
+ *     driven by the per-chip `--i` custom property, muted under
+ *     prefers-reduced-motion. Because it's an animation on `display: none →
+ *     inline-flex` (via keyframes on the newly-shown chips only), it fires
+ *     every time the container expands and never on collapse.
  *
- * The previous version made the ring invisible: the inner disc used
- * `inset-1` (1px), while the SVG stroke was 6px wide, so the disc sat *on top
- * of the ring* and covered it. The inner disc now insets by `stroke + gap` so
- * the ring is always visible around it.
+ * The mount animation on individual Skill components is kept (framer-motion)
+ * only for the *initial* card entrance — it does not participate in the
+ * expand/collapse cycle.
  */
 
 const CAP = 300;
@@ -38,7 +43,7 @@ function initialsOf(name) {
   return (parts[0][0] ?? '') + (parts[1][0] ?? '');
 }
 
-function Skill({ lang, index, reduced, sharePct, staggerBase = 0 }) {
+function Skill({ lang, index, reduced, sharePct, isExtra }) {
   const color = languageColor(lang.name);
   const progress = skillProgress(lang);
   const size = 72;
@@ -55,16 +60,13 @@ function Skill({ lang, index, reduced, sharePct, staggerBase = 0 }) {
       initial={{ opacity: 0, y: 8, scale: 0.9 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={
-        reduced
-          ? { duration: 0 }
-          : {
-              delay: staggerBase + index * 0.025,
-              duration: 0.15,
-              ease: 'easeOut',
-            }
+        reduced ? { duration: 0 } : { delay: index * 0.025, duration: 0.15, ease: 'easeOut' }
       }
       whileHover={reduced ? {} : { scale: 1.06 }}
-      className="flex flex-col items-center gap-1 select-none"
+      className={`lang-chip flex flex-col items-center gap-1 select-none${isExtra ? ' is-extra' : ''}`}
+      // --i lets the reveal keyframe stagger extras by their tail-index only.
+      // Non-extras don't use it (they're always visible, no reveal fires).
+      style={isExtra ? { '--i': index } : undefined}
       title={
         `${lang.name} · ${Math.round((lang.xp ?? perLanguageXp(lang.bytes)) || 0)} / ` +
         `${lang.xpCap ?? CAP} XP · ${(lang.bytes ?? 0).toLocaleString()} bytes` +
@@ -103,22 +105,6 @@ function Skill({ lang, index, reduced, sharePct, staggerBase = 0 }) {
               transition={reduced ? { duration: 0 } : { duration: 0.8, ease: 'easeOut' }}
             />
           )}
-          {/* Thin share-of-bytes fill along the bottom edge — only visible when
-              the caller supplies a percentage (expanded mode). Sits inside the
-              same SVG so it inherits the rotation and never affects layout. */}
-          {showShare && (
-            <motion.rect
-              x={size / 2 - r}
-              y={size - stroke - 1}
-              width={2 * r * (sharePct / 100)}
-              height={2}
-              fill={color}
-              opacity="0.85"
-              initial={reduced ? { opacity: 0.85 } : { opacity: 0 }}
-              animate={{ opacity: 0.85 }}
-              transition={reduced ? { duration: 0 } : { duration: 0.2, delay: 0.15 }}
-            />
-          )}
         </svg>
         <div
           className="absolute rounded-full flex items-center justify-center font-black text-black text-sm"
@@ -148,58 +134,30 @@ function Skill({ lang, index, reduced, sharePct, staggerBase = 0 }) {
 }
 
 /**
- * Expandable list of language skills.
- *
  * Props:
- *   - topLanguages: full sorted list (bytes desc). The component renders the
- *     first COLLAPSED_LIMIT and hides the rest behind a "+N" toggle chip.
- *   - extraCount: DEPRECATED. Old callers passed `languageCount - shown` when
- *     the backend still sliced to 5; the API now ships every language so
- *     `topLanguages.length` is the truth. Ignored when the list itself has
- *     more than COLLAPSED_LIMIT entries; still used as a fallback when the
- *     caller couldn't ship the tail (e.g. very old snapshots).
+ *   - topLanguages: full sorted list (bytes desc). Everything past index
+ *     COLLAPSED_LIMIT is hidden until the "+N" toggle is clicked.
+ *   - extraCount: legacy fallback for very old snapshots where the backend
+ *     still sliced the tail off. Rendered as a static "+N" pill (no
+ *     interaction — there is nothing to reveal).
  */
 export default function LanguageSkills({ topLanguages = [], extraCount = 0 }) {
   const reduced = useReducedMotion();
   const [expanded, setExpanded] = useState(false);
   const toggleRef = useRef(null);
-  const containerRef = useRef(null);
-  const [maxHeight, setMaxHeight] = useState('none');
 
   if (!topLanguages.length) return null;
 
-  const visible = expanded ? topLanguages : topLanguages.slice(0, COLLAPSED_LIMIT);
   const hiddenTailCount = Math.max(0, topLanguages.length - COLLAPSED_LIMIT);
-  // If the backend still slices the tail off (legacy snapshots) we fall back
-  // to the count-only chip that used to render — no dead click target.
-  const legacyExtra = hiddenTailCount === 0 && extraCount > 0 ? extraCount : 0;
   const canExpand = hiddenTailCount > 0;
+  const legacyExtra = !canExpand && extraCount > 0 ? extraCount : 0;
   const totalBytes = topLanguages.reduce((sum, l) => sum + (l.bytes ?? 0), 0);
-
-  // Smooth height transition on the wrapper: measure the natural height of the
-  // chip row on every render and apply it as maxHeight. CSS transitions the
-  // change, so the surrounding card grows/shrinks without content jumping.
-  useEffect(() => {
-    if (!containerRef.current) return;
-    if (reduced) {
-      setMaxHeight('none');
-      return;
-    }
-    const el = containerRef.current;
-    // Two frames: let the DOM settle after chips mount before measuring.
-    const raf = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setMaxHeight(`${el.scrollHeight}px`);
-      });
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [expanded, topLanguages.length, reduced]);
 
   const handleToggle = () => {
     setExpanded((v) => !v);
-    // On collapse, return focus to the toggle chip so keyboard users don't
-    // lose their place. The button re-mounts at the end of the row when
-    // expanded, so a re-focus on the same ref works in both directions.
+    // Keep keyboard focus on the toggle across the state flip; the button is
+    // the same DOM node so this is a no-op re-focus that satisfies the
+    // "focus stays on toggle" behaviour spec on both expand and collapse.
     requestAnimationFrame(() => {
       toggleRef.current?.focus?.();
     });
@@ -207,77 +165,72 @@ export default function LanguageSkills({ topLanguages = [], extraCount = 0 }) {
 
   return (
     <div
-      ref={containerRef}
-      className="overflow-hidden"
-      style={{
-        maxHeight: reduced ? 'none' : maxHeight,
-        transition: reduced ? undefined : 'max-height 220ms ease',
-      }}
+      className={`lang-row flex flex-wrap gap-4 items-center${expanded ? ' is-expanded' : ''}`}
     >
-      <div className="flex flex-wrap gap-4 items-center">
-        {visible.map((lang, i) => {
-          const isNewlyRevealed = expanded && i >= COLLAPSED_LIMIT;
-          const sharePct =
-            expanded && totalBytes > 0 ? ((lang.bytes ?? 0) / totalBytes) * 100 : null;
-          return (
-            <Skill
-              key={lang.name}
-              lang={lang}
-              index={isNewlyRevealed ? i - COLLAPSED_LIMIT : 0}
-              staggerBase={isNewlyRevealed ? 0 : 0}
-              reduced={reduced}
-              sharePct={sharePct}
-            />
-          );
-        })}
-        {canExpand && (
-          <button
-            ref={toggleRef}
-            type="button"
-            onClick={handleToggle}
-            aria-expanded={expanded}
-            aria-label={
-              expanded
-                ? 'Show fewer languages'
-                : `Show ${hiddenTailCount} more language${hiddenTailCount === 1 ? '' : 's'}`
-            }
-            className={
-              'flex flex-col items-center justify-center rounded-full border-2 border-dashed ' +
-              'border-ghborder text-ghmuted text-xs font-bold cursor-pointer ' +
-              'hover:border-duo-green hover:text-duo-green ' +
-              'focus:outline-none focus-visible:ring-2 focus-visible:ring-duo-green ' +
-              'focus-visible:ring-offset-2 focus-visible:ring-offset-ghsurface ' +
-              'transition-colors'
-            }
-            style={{ width: 72, height: 72 }}
-          >
-            {expanded ? (
-              <>
-                <span aria-hidden="true">−</span>
-                <span className="text-[10px] font-semibold leading-tight mt-0.5">
-                  Show less
-                </span>
-              </>
-            ) : (
-              <>
-                <span aria-hidden="true">+{hiddenTailCount}</span>
-                <span className="text-[10px] font-semibold leading-tight mt-0.5">
-                  more
-                </span>
-              </>
-            )}
-          </button>
-        )}
-        {!canExpand && legacyExtra > 0 && (
-          <div
-            className="flex flex-col items-center justify-center rounded-full border-2 border-dashed border-ghborder text-ghmuted text-xs font-bold"
-            style={{ width: 72, height: 72 }}
-            title={`${legacyExtra} more language${legacyExtra === 1 ? '' : 's'}`}
-          >
-            +{legacyExtra}
-          </div>
-        )}
-      </div>
+      {topLanguages.map((lang, i) => {
+        const isExtra = i >= COLLAPSED_LIMIT;
+        // Only compute share when expanded (collapsed state must look
+        // identical to before this feature landed).
+        const sharePct = expanded && totalBytes > 0
+          ? ((lang.bytes ?? 0) / totalBytes) * 100
+          : null;
+        return (
+          <Skill
+            key={lang.name}
+            lang={lang}
+            // Stagger index for the reveal keyframe: tail chips only.
+            index={isExtra ? i - COLLAPSED_LIMIT : i}
+            reduced={reduced}
+            sharePct={sharePct}
+            isExtra={isExtra}
+          />
+        );
+      })}
+
+      {canExpand && (
+        <button
+          ref={toggleRef}
+          type="button"
+          onClick={handleToggle}
+          aria-expanded={expanded}
+          aria-label={
+            expanded
+              ? 'Show fewer languages'
+              : `Show ${hiddenTailCount} more language${hiddenTailCount === 1 ? '' : 's'}`
+          }
+          className={
+            'lang-toggle flex flex-col items-center justify-center rounded-full border-2 border-dashed ' +
+            'border-ghborder text-ghmuted text-xs font-bold cursor-pointer ' +
+            'hover:border-duo-green hover:text-duo-green ' +
+            'focus:outline-none focus-visible:ring-2 focus-visible:ring-duo-green ' +
+            'focus-visible:ring-offset-2 focus-visible:ring-offset-ghsurface ' +
+            'transition-colors'
+          }
+          style={{ width: 72, height: 72 }}
+        >
+          {expanded ? (
+            <>
+              <span aria-hidden="true">−</span>
+              <span className="text-[10px] font-semibold leading-tight mt-0.5">Show less</span>
+            </>
+          ) : (
+            <>
+              <span aria-hidden="true">+{hiddenTailCount}</span>
+              <span className="text-[10px] font-semibold leading-tight mt-0.5">more</span>
+            </>
+          )}
+        </button>
+      )}
+
+      {legacyExtra > 0 && (
+        <div
+          className="flex flex-col items-center justify-center rounded-full border-2 border-dashed border-ghborder text-ghmuted text-xs font-bold"
+          style={{ width: 72, height: 72 }}
+          title={`${legacyExtra} more language${legacyExtra === 1 ? '' : 's'}`}
+        >
+          +{legacyExtra}
+        </div>
+      )}
     </div>
   );
 }

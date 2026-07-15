@@ -361,6 +361,43 @@ export async function buildCohortTitles(prisma, cohort) {
 }
 
 /**
+ * Hard cap on the flat `GET /members` directory. At the current program scale
+ * (dozens to low hundreds) the whole membership fits comfortably; the cap only
+ * exists so a future run-away doesn't ship an unbounded payload to every
+ * combobox on the frontend. If we cross the cap in production we'll add
+ * `?q=` server-side filtering rather than pagination — pickers want the whole
+ * list to filter, not a page of it.
+ */
+export const MEMBER_DIRECTORY_CAP = 500;
+
+/**
+ * Flat, sorted list of every member — just the three public fields the
+ * combobox picker on /compare (and future pickers) need. Sorted by
+ * `displayName` (case-insensitive) with a fallback to `githubUsername` when
+ * the display name is empty, so the picker always has a stable order to key
+ * off. Pure view; no snapshots or joins.
+ *
+ * @returns {Promise<{githubUsername: string, displayName: string|null, avatarUrl: string|null}[]>}
+ */
+export async function buildMemberDirectory(prisma) {
+  const rows = await prisma.member.findMany({
+    take: MEMBER_DIRECTORY_CAP,
+    select: {
+      githubUsername: true,
+      displayName: true,
+      avatarUrl: true,
+    },
+  });
+  const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
+  rows.sort((a, b) => {
+    const an = (a.displayName || a.githubUsername || '').trim();
+    const bn = (b.displayName || b.githubUsername || '').trim();
+    return collator.compare(an, bn);
+  });
+  return rows;
+}
+
+/**
  * Fixed stat list for the head-to-head comparison. Order matters — the frontend
  * table renders rows in this order. Adding a stat here also adds it to the
  * running-score tally, so keep the set balanced across "productivity" and

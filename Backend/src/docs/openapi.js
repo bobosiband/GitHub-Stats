@@ -382,6 +382,27 @@ export const openapiDocument = {
           },
         },
       },
+      MemberDirectoryEntry: {
+        type: 'object',
+        properties: {
+          githubUsername: { type: 'string', example: 'octocat' },
+          displayName: { type: 'string', nullable: true },
+          avatarUrl: { type: 'string', nullable: true },
+        },
+      },
+      MemberDirectory: {
+        type: 'object',
+        description:
+          'Flat directory of every member — just the fields a picker/combobox needs. Sorted ' +
+          'alphabetically by `displayName` (falling back to `githubUsername`), case-insensitive. ' +
+          'Capped at 500 entries; at the current program scale this fits the whole roster.',
+        properties: {
+          members: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/MemberDirectoryEntry' },
+          },
+        },
+      },
       CompareVerdict: {
         type: 'object',
         properties: {
@@ -762,6 +783,18 @@ export const openapiDocument = {
           404: errorResponse('Unknown slug'),
           409: errorResponse('Duplicate zid/username belonging to a different identity'),
           422: errorResponse('GitHub user not found'),
+        },
+      },
+    },
+    '/members': {
+      get: {
+        tags: ['Members'],
+        summary: 'Directory of members',
+        description:
+          'Flat, sorted list of every member with just the public fields a combobox needs. ' +
+          'Capped at 500 entries.',
+        responses: {
+          200: jsonResponse('Member directory', 'MemberDirectory'),
         },
       },
     },

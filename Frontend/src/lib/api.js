@@ -188,6 +188,9 @@ export const getLeaderboard = (slug, sort = 'xp') =>
 export const getCohortTitles = (slug) =>
   request(`/cohorts/${encodeURIComponent(slug)}/titles`);
 
+/** GET /members — flat directory used by pickers. */
+export const getMemberDirectory = () => request('/members');
+
 /** GET /members/:username */
 export const getMember = (username) =>
   request(`/members/${encodeURIComponent(username)}`);

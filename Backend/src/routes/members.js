@@ -4,6 +4,8 @@ import {
   getMemberByUsernameOrThrow,
   buildMemberProfile,
   buildCompare,
+  buildMemberDirectory,
+  MEMBER_DIRECTORY_CAP,
 } from '../services/views.js';
 
 const compareQuerySchema = z.object({
@@ -12,6 +14,17 @@ const compareQuerySchema = z.object({
 });
 
 export default async function memberRoutes(fastify) {
+  // GET /members — lightweight public directory used by pickers (e.g. /compare).
+  // Not paginated; capped at MEMBER_DIRECTORY_CAP rows because at the current
+  // program scale that comfortably fits the whole membership. If the roster
+  // ever grows past the cap the client sees a truncated list and we can add
+  // ?q= server-side search — but we deliberately don't ship pagination for a
+  // 60-line component that only needs a flat list to filter client-side.
+  fastify.get('/', async () => {
+    const members = await buildMemberDirectory(fastify.prisma);
+    return { members };
+  });
+
   // GET /members/compare?a=:username&b=:username
   //
   // Registered BEFORE /:username so the literal path wins the match — Fastify
