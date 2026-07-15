@@ -18,7 +18,9 @@
           "languages": {
             "edges": [
               { "size": 10000, "node": { "name": "JavaScript" } },
-              { "size": 5000, "node": { "name": "TypeScript" } }
+              { "size": 5000, "node": { "name": "TypeScript" } },
+              { "size": 6000, "node": { "name": "Rust" } },
+              { "size": 1500, "node": { "name": "Go" } }
             ]
           }
         },
@@ -28,7 +30,9 @@
           "languages": {
             "edges": [
               { "size": 8000, "node": { "name": "TypeScript" } },
-              { "size": 2000, "node": { "name": "CSS" } }
+              { "size": 2000, "node": { "name": "CSS" } },
+              { "size": 4000, "node": { "name": "Ruby" } },
+              { "size": 1000, "node": { "name": "Shell" } }
             ]
           }
         },
@@ -36,7 +40,10 @@
           "name": "scripts",
           "stargazerCount": 0,
           "languages": {
-            "edges": [{ "size": 3000, "node": { "name": "Python" } }]
+            "edges": [
+              { "size": 3000, "node": { "name": "Python" } },
+              { "size": 500, "node": { "name": "Dockerfile" } }
+            ]
           }
         }
       ]

@@ -45,16 +45,29 @@ describe('normalizeUserStats', () => {
     expect(stats.totalContributions).toBe(36);
   });
 
-  it('aggregates languages by bytes and returns the full sorted list', () => {
-    expect(stats.languageCount).toBe(4);
-    // Full list (bytes desc) — the profile UI decides how many chips to show
-    // up front and reveals the rest on click.
+  it('aggregates languages by bytes and returns the FULL sorted list (no top-5 cap)', () => {
+    expect(stats.languageCount).toBe(9);
+    // Full list (bytes desc). The profile UI keeps everything past the first
+    // few behind a "+N" toggle, so any truncation here would silently kill
+    // the reveal — hence asserting every entry.
     expect(stats.topLanguages).toEqual([
       { name: 'TypeScript', bytes: 13000 },
       { name: 'JavaScript', bytes: 10000 },
+      { name: 'Rust', bytes: 6000 },
+      { name: 'Ruby', bytes: 4000 },
       { name: 'Python', bytes: 3000 },
       { name: 'CSS', bytes: 2000 },
+      { name: 'Go', bytes: 1500 },
+      { name: 'Shell', bytes: 1000 },
+      { name: 'Dockerfile', bytes: 500 },
     ]);
+  });
+
+  it('returns more than the collapsed-cap of 5 so the profile reveal has data', () => {
+    // Regression guard: the "+N" chip on the profile is bound to
+    // `topLanguages.length > 5`. A silent slice(0, 5) anywhere on the write
+    // or read path would resurface as a broken UI — pin the invariant here.
+    expect(stats.topLanguages.length).toBeGreaterThan(5);
   });
 
   it('flattens the calendar and derives streak stats', () => {

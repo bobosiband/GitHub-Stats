@@ -93,14 +93,20 @@ const MEMBERS = [
       totalStars: 1500,
       repoCount: 80,
       contributedRepoCount: 60,
-      languageCount: 6,
+      languageCount: 8,
     },
+    // 8 languages — the "+N" reveal only kicks in above the collapsed cap,
+    // so both linus and grace-hopper are seeded above it. That way two
+    // profiles independently exercise the feature after `npm run db:seed`.
     topLanguages: [
       { name: 'C', bytes: 5000000 },
       { name: 'Shell', bytes: 300000 },
       { name: 'Assembly', bytes: 200000 },
       { name: 'Perl', bytes: 90000 },
       { name: 'Makefile', bytes: 60000 },
+      { name: 'Python', bytes: 40000 },
+      { name: 'Dockerfile', bytes: 12000 },
+      { name: 'Ruby', bytes: 4000 },
     ],
     nightCommitRatio: null,
     calendarFn: personality({ base: 2, gapEvery: 9, spikeEvery: 25, spikeTo: 10 }),
