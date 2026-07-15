@@ -211,7 +211,6 @@ function CohortBlock({ entry }) {
   const prog = progressionFrom(entry);
   const stats = entry.stats;
   const topLanguages = stats?.topLanguages ?? [];
-  const extraCount = Math.max(0, (stats?.languageCount ?? 0) - topLanguages.length);
 
   return (
     <section className="rounded-2xl border-2 border-ghborder bg-ghsurface overflow-hidden">
@@ -245,7 +244,7 @@ function CohortBlock({ entry }) {
             {topLanguages.length > 0 && (
               <div>
                 <div className="text-sm text-ghmuted mb-2">Language skills</div>
-                <LanguageSkills topLanguages={topLanguages} extraCount={extraCount} />
+                <LanguageSkills topLanguages={topLanguages} />
               </div>
             )}
           </>

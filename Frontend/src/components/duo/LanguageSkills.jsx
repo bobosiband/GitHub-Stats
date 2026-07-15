@@ -5,27 +5,24 @@ import { perLanguageXp } from '../../lib/xp.js';
 import { useReducedMotion } from '../../hooks/useReducedMotion.js';
 
 /**
- * Language "skill circles" for a member's profile.
+ * Language "skill circles" on the profile.
  *
- * Rendering model — deliberately dumb, so the reveal can't get stuck:
- *   - Every language in `topLanguages` renders once, unconditionally.
- *   - Chips at index >= COLLAPSED_LIMIT carry the `is-extra` class, which is
- *     `display: none` until the container gains `is-expanded` (a plain CSS
- *     class toggle — no JS measurement, no max-height math).
- *   - The toggle button (a real <button>) flips the class + aria-expanded.
- *   - Reveal animation is a CSS @keyframes (see `styles.css`) with a stagger
- *     driven by the per-chip `--i` custom property, muted under
- *     prefers-reduced-motion. Because it's an animation on `display: none →
- *     inline-flex` (via keyframes on the newly-shown chips only), it fires
- *     every time the container expands and never on collapse.
+ * Every language in `topLanguages` is rendered up front; anything past the
+ * first COLLAPSED_LIMIT gets `.is-extra` (display: none) until the row's
+ * container gains `.is-expanded`. The toggle is a real <button> that flips
+ * that class and its own aria-expanded — no JS animation math, no
+ * measurement, so nothing to get out of sync.
  *
- * The mount animation on individual Skill components is kept (framer-motion)
- * only for the *initial* card entrance — it does not participate in the
- * expand/collapse cycle.
+ * Prerequisite: the API must ship the full `topLanguages` array. Snapshots
+ * written before `services/github/fetchUserStats.js` stopped `.slice(0, 5)`-ing
+ * the list only have 5 entries, so this component can only reveal what's
+ * there — old rows need a resync (or reseed) to gain the tail.
  */
 
 const CAP = 300;
 const COLLAPSED_LIMIT = 5;
+const SIZE = 72;
+const STROKE = 6;
 
 function skillProgress(lang) {
   if (!lang) return 0;
@@ -43,61 +40,61 @@ function initialsOf(name) {
   return (parts[0][0] ?? '') + (parts[1][0] ?? '');
 }
 
-function Skill({ lang, index, reduced, sharePct, isExtra }) {
+/**
+ * A single circular language badge — reused for both the always-visible top
+ * chips and the revealed extras. `revealIndex` drives the stagger delay
+ * (via --i) when the badge is an extra; it's ignored otherwise.
+ */
+function Skill({ lang, reduced, isExtra, revealIndex = 0 }) {
   const color = languageColor(lang.name);
   const progress = skillProgress(lang);
-  const size = 72;
-  const stroke = 6;
-  const r = (size - stroke) / 2;
+  const r = (SIZE - STROKE) / 2;
   const c = 2 * Math.PI * r;
   const dashOffset = c - c * progress;
-  const innerInset = stroke + 4;
+  const innerInset = STROKE + 4;
   const maxed = progress >= 1;
-  const showShare = sharePct != null;
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8, scale: 0.9 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={
-        reduced ? { duration: 0 } : { delay: index * 0.025, duration: 0.15, ease: 'easeOut' }
-      }
+      // Only the always-visible top chips play the framer-motion mount
+      // animation. Extras rely on the CSS reveal keyframe so we don't fight
+      // React remounts / re-renders on toggle.
+      initial={isExtra ? false : { opacity: 0, y: 8, scale: 0.9 }}
+      animate={isExtra ? false : { opacity: 1, y: 0, scale: 1 }}
+      transition={isExtra || reduced ? { duration: 0 } : { duration: 0.15, ease: 'easeOut' }}
       whileHover={reduced ? {} : { scale: 1.06 }}
       className={`lang-chip flex flex-col items-center gap-1 select-none${isExtra ? ' is-extra' : ''}`}
-      // --i lets the reveal keyframe stagger extras by their tail-index only.
-      // Non-extras don't use it (they're always visible, no reveal fires).
-      style={isExtra ? { '--i': index } : undefined}
+      style={isExtra ? { '--i': revealIndex } : undefined}
       title={
         `${lang.name} · ${Math.round((lang.xp ?? perLanguageXp(lang.bytes)) || 0)} / ` +
-        `${lang.xpCap ?? CAP} XP · ${(lang.bytes ?? 0).toLocaleString()} bytes` +
-        (showShare ? ` · ${sharePct.toFixed(1)}% of code` : '')
+        `${lang.xpCap ?? CAP} XP · ${(lang.bytes ?? 0).toLocaleString()} bytes`
       }
     >
       <div
         className="relative"
         style={{
-          width: size,
-          height: size,
+          width: SIZE,
+          height: SIZE,
           filter: maxed ? `drop-shadow(0 0 6px ${color})` : 'none',
         }}
       >
-        <svg width={size} height={size} className="-rotate-90">
+        <svg width={SIZE} height={SIZE} className="-rotate-90">
           <circle
-            cx={size / 2}
-            cy={size / 2}
+            cx={SIZE / 2}
+            cy={SIZE / 2}
             r={r}
             fill="none"
             stroke="rgba(255,255,255,0.10)"
-            strokeWidth={stroke}
+            strokeWidth={STROKE}
           />
           {progress > 0 && (
             <motion.circle
-              cx={size / 2}
-              cy={size / 2}
+              cx={SIZE / 2}
+              cy={SIZE / 2}
               r={r}
               fill="none"
               stroke={color}
-              strokeWidth={stroke}
+              strokeWidth={STROKE}
               strokeLinecap="round"
               strokeDasharray={c}
               initial={reduced ? { strokeDashoffset: dashOffset } : { strokeDashoffset: c }}
@@ -124,24 +121,20 @@ function Skill({ lang, index, reduced, sharePct, isExtra }) {
       <div className="text-[11px] text-ghfg font-semibold max-w-[80px] truncate text-center leading-tight">
         {lang.name}
       </div>
-      {showShare && (
-        <div className="text-[10px] text-ghmuted font-mono leading-none">
-          {sharePct >= 1 ? `${sharePct.toFixed(0)}%` : '<1%'}
-        </div>
-      )}
     </motion.div>
   );
 }
 
 /**
  * Props:
- *   - topLanguages: full sorted list (bytes desc). Everything past index
- *     COLLAPSED_LIMIT is hidden until the "+N" toggle is clicked.
- *   - extraCount: legacy fallback for very old snapshots where the backend
- *     still sliced the tail off. Rendered as a static "+N" pill (no
- *     interaction — there is nothing to reveal).
+ *   - topLanguages: the full, byte-sorted language list. Everything past index
+ *     COLLAPSED_LIMIT is hidden behind the "+N" toggle.
+ *
+ * If the API only shipped ≤ COLLAPSED_LIMIT languages (nothing to reveal), no
+ * toggle is rendered at all. This is intentional — a "+N" pill you can't
+ * click is worse than no pill.
  */
-export default function LanguageSkills({ topLanguages = [], extraCount = 0 }) {
+export default function LanguageSkills({ topLanguages = [] }) {
   const reduced = useReducedMotion();
   const [expanded, setExpanded] = useState(false);
   const toggleRef = useRef(null);
@@ -150,39 +143,28 @@ export default function LanguageSkills({ topLanguages = [], extraCount = 0 }) {
 
   const hiddenTailCount = Math.max(0, topLanguages.length - COLLAPSED_LIMIT);
   const canExpand = hiddenTailCount > 0;
-  const legacyExtra = !canExpand && extraCount > 0 ? extraCount : 0;
-  const totalBytes = topLanguages.reduce((sum, l) => sum + (l.bytes ?? 0), 0);
 
   const handleToggle = () => {
     setExpanded((v) => !v);
-    // Keep keyboard focus on the toggle across the state flip; the button is
-    // the same DOM node so this is a no-op re-focus that satisfies the
-    // "focus stays on toggle" behaviour spec on both expand and collapse.
+    // Keep keyboard focus on the toggle across the state flip — the button is
+    // the same DOM node either way, so re-focusing on the same ref covers
+    // both expand and collapse without losing the caret.
     requestAnimationFrame(() => {
       toggleRef.current?.focus?.();
     });
   };
 
   return (
-    <div
-      className={`lang-row flex flex-wrap gap-4 items-center${expanded ? ' is-expanded' : ''}`}
-    >
+    <div className={`lang-row flex flex-wrap gap-4 items-center${expanded ? ' is-expanded' : ''}`}>
       {topLanguages.map((lang, i) => {
         const isExtra = i >= COLLAPSED_LIMIT;
-        // Only compute share when expanded (collapsed state must look
-        // identical to before this feature landed).
-        const sharePct = expanded && totalBytes > 0
-          ? ((lang.bytes ?? 0) / totalBytes) * 100
-          : null;
         return (
           <Skill
             key={lang.name}
             lang={lang}
-            // Stagger index for the reveal keyframe: tail chips only.
-            index={isExtra ? i - COLLAPSED_LIMIT : i}
             reduced={reduced}
-            sharePct={sharePct}
             isExtra={isExtra}
+            revealIndex={isExtra ? i - COLLAPSED_LIMIT : 0}
           />
         );
       })}
@@ -198,19 +180,12 @@ export default function LanguageSkills({ topLanguages = [], extraCount = 0 }) {
               ? 'Show fewer languages'
               : `Show ${hiddenTailCount} more language${hiddenTailCount === 1 ? '' : 's'}`
           }
-          className={
-            'lang-toggle flex flex-col items-center justify-center rounded-full border-2 border-dashed ' +
-            'border-ghborder text-ghmuted text-xs font-bold cursor-pointer ' +
-            'hover:border-duo-green hover:text-duo-green ' +
-            'focus:outline-none focus-visible:ring-2 focus-visible:ring-duo-green ' +
-            'focus-visible:ring-offset-2 focus-visible:ring-offset-ghsurface ' +
-            'transition-colors'
-          }
-          style={{ width: 72, height: 72 }}
+          className="lang-toggle"
+          style={{ width: SIZE, height: SIZE }}
         >
           {expanded ? (
             <>
-              <span aria-hidden="true">−</span>
+              <span aria-hidden="true" className="text-lg leading-none">−</span>
               <span className="text-[10px] font-semibold leading-tight mt-0.5">Show less</span>
             </>
           ) : (
@@ -220,16 +195,6 @@ export default function LanguageSkills({ topLanguages = [], extraCount = 0 }) {
             </>
           )}
         </button>
-      )}
-
-      {legacyExtra > 0 && (
-        <div
-          className="flex flex-col items-center justify-center rounded-full border-2 border-dashed border-ghborder text-ghmuted text-xs font-bold"
-          style={{ width: 72, height: 72 }}
-          title={`${legacyExtra} more language${legacyExtra === 1 ? '' : 's'}`}
-        >
-          +{legacyExtra}
-        </div>
       )}
     </div>
   );
