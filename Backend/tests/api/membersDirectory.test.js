@@ -1,13 +1,11 @@
 import { describe, it, expect, beforeEach, afterAll, beforeAll } from 'vitest';
 import { buildTestApp } from '../helpers/app.js';
 import {
-  getPrisma,
   resetDb,
   disconnectDb,
   makeMember,
 } from '../helpers/db.js';
 
-const prisma = getPrisma();
 let app;
 
 beforeAll(async () => {

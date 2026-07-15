@@ -5,7 +5,6 @@ import {
   buildMemberProfile,
   buildCompare,
   buildMemberDirectory,
-  MEMBER_DIRECTORY_CAP,
 } from '../services/views.js';
 
 const compareQuerySchema = z.object({

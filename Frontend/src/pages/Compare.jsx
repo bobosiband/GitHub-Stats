@@ -2,20 +2,23 @@
  * Compare — head-to-head duel between two members.
  *
  * URL is the source of truth: `/compare?a=alice&b=bob` renders the duel
- * directly (deep-linkable, shareable). The two picker inputs update the
- * URL when submitted; the fetcher keys off the query params, so navigating
- * back/forward replays the fetch.
+ * directly (deep-linkable, shareable). Both pickers read the directory ONCE
+ * on mount and write their selection into the URL query, which cascades back
+ * into the pickers as their `value` — so back/forward navigation just works.
  *
- * Data: GET /members/compare?a=&b=.
+ * Data:
+ *   - GET /members            → the picker directory (shared between both pickers)
+ *   - GET /members/compare?a=&b=  → the duel itself
  */
 
-import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { compareMembers, ApiError } from '../lib/api.js';
+import { compareMembers, getMemberDirectory, ApiError } from '../lib/api.js';
 import { useFetch, num } from '../lib/util.js';
+import { useReducedMotion } from '../hooks/useReducedMotion.js';
 import { Avatar, EmptyState, ErrorState } from '../components/ui.jsx';
 import { IconPeople, IconTrophy } from '../components/Icons.jsx';
 import { SkeletonList } from '../components/duo/SkeletonRow.jsx';
+import MemberPicker from '../components/duo/MemberPicker.jsx';
 
 const STAT_LABELS = {
   totalCommits: 'Commits',
@@ -34,70 +37,74 @@ export default function Compare() {
   const a = params.get('a') ?? '';
   const b = params.get('b') ?? '';
   const ready = a.length > 0 && b.length > 0;
+  const reduced = useReducedMotion();
+
+  // Fetched once for the whole page; both pickers use the same list.
+  const {
+    data: dir,
+    error: dirError,
+    loading: dirLoading,
+    retry: retryDir,
+  } = useFetch(() => getMemberDirectory(), []);
+  const members = dir?.members ?? [];
+
+  // Preserve whichever slot is already set when the user changes the other.
+  const setA = (nextA) => {
+    const next = new URLSearchParams(params);
+    if (nextA) next.set('a', nextA); else next.delete('a');
+    setParams(next);
+  };
+  const setB = (nextB) => {
+    const next = new URLSearchParams(params);
+    if (nextB) next.set('b', nextB); else next.delete('b');
+    setParams(next);
+  };
 
   return (
     <div className="container stack gap-16">
-      <PickerBar defaultA={a} defaultB={b} onSubmit={(na, nb) => setParams({ a: na, b: nb })} />
+      <section className="rounded-2xl border-2 border-ghborder bg-ghsurface p-4">
+        <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] items-end">
+          <MemberPicker
+            label="Left"
+            id="compare-a"
+            members={members}
+            value={a}
+            onChange={setA}
+            disabledUsername={b}
+            reduced={reduced}
+          />
+          <div className="text-center font-black text-ghmuted pb-2 hidden sm:block">vs</div>
+          <MemberPicker
+            label="Right"
+            id="compare-b"
+            members={members}
+            value={b}
+            onChange={setB}
+            disabledUsername={a}
+            reduced={reduced}
+          />
+        </div>
+        {dirError && (
+          <div className="mt-3 text-sm text-danger">
+            Couldn't load the member directory. <button className="underline" onClick={retryDir}>Retry</button>
+          </div>
+        )}
+      </section>
+
       {!ready ? (
         <EmptyState
           icon={<IconPeople size={32} />}
           title="Pick two members"
-          description="Enter two GitHub usernames above to see who wins on the stats that matter."
+          description={
+            dirLoading
+              ? 'Loading the roster…'
+              : 'Choose two members above to see who wins on the stats that matter.'
+          }
         />
       ) : (
         <Duel a={a} b={b} />
       )}
     </div>
-  );
-}
-
-function PickerBar({ defaultA, defaultB, onSubmit }) {
-  const [aVal, setAVal] = useState(defaultA);
-  const [bVal, setBVal] = useState(defaultB);
-
-  // Keep local state in sync when the URL changes underneath us (e.g. browser
-  // back/forward, or a link into the page).
-  useEffect(() => {
-    setAVal(defaultA);
-    setBVal(defaultB);
-  }, [defaultA, defaultB]);
-
-  const submit = (e) => {
-    e.preventDefault();
-    const na = aVal.trim().replace(/^@/, '');
-    const nb = bVal.trim().replace(/^@/, '');
-    if (na && nb) onSubmit(na, nb);
-  };
-
-  return (
-    <form onSubmit={submit} className="rounded-2xl border-2 border-ghborder bg-ghsurface p-4">
-      <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr_auto] items-end">
-        <PickerInput label="Left" value={aVal} onChange={setAVal} id="compare-a" />
-        <div className="text-center font-black text-ghmuted pb-2 hidden sm:block">vs</div>
-        <PickerInput label="Right" value={bVal} onChange={setBVal} id="compare-b" />
-        <button type="submit" className="btn primary">
-          Compare
-        </button>
-      </div>
-    </form>
-  );
-}
-
-function PickerInput({ label, value, onChange, id }) {
-  return (
-    <label className="stack gap-4" htmlFor={id}>
-      <span className="text-xs uppercase tracking-wide text-ghmuted font-semibold">{label}</span>
-      <input
-        id={id}
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="GitHub username"
-        className="rounded-xl border-2 border-ghborder bg-ghinset px-3 py-2 text-ghfg font-mono"
-        autoComplete="off"
-        spellCheck={false}
-      />
-    </label>
   );
 }
 

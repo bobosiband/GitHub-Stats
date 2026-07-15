@@ -1023,6 +1023,19 @@ kbd {
 .link-plain:hover { color: var(--accent); }
 
 
+/* Member-picker combobox dropdown — subtle open animation. Disabled for
+   users who set data-reduced="true" (component gates this on the media
+   query hook so we don't need duplicate CSS rules). */
+.member-picker-panel[data-reduced="false"] {
+  animation: member-picker-open 120ms ease-out both;
+  transform-origin: top center;
+}
+@keyframes member-picker-open {
+  from { opacity: 0; transform: translateY(-4px) scaleY(0.98); }
+  to   { opacity: 1; transform: translateY(0)    scaleY(1); }
+}
+
+
 /* Language "skills" row on the profile — collapsed by default, revealed
    via the "+N" button (see components/duo/LanguageSkills.jsx). Chips past
    the collapsed cap sit in the DOM with `display: none`; toggling the
